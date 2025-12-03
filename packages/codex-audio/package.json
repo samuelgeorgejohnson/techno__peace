@@ -1,0 +1,8 @@
+{
+  "name": "@technopeace/codex-audio",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Audio rendering utilities for TechnoPeace (Python DSP cores).",
+  "keywords": ["technopeace", "audio", "dsp", "resonance"],
+  "license": "MIT"
+}

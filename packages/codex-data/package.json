@@ -1,0 +1,7 @@
+{
+  "name": "@technopeace/codex-data",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/types.ts",
+  "types": "src/types.ts"
+}

@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@technopeace/codex-data/*": ["packages/codex-data/src/*"],
+      "@technopeace/codex-visual/*": ["packages/codex-visual/src/*"],
+      "@technopeace/codex-ui/*": ["packages/codex-ui/src/*"],
+      "@technopeace/codex-map/*": ["packages/codex-map/src/*"]
+    }
+  }
+}

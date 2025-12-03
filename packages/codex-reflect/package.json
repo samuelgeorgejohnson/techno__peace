@@ -1,0 +1,7 @@
+{
+  "name": "@technopeace/codex-reflect",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/client.ts",
+  "types": "src/client.ts"
+}

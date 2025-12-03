@@ -1,0 +1,6 @@
+{
+  "calm": { "tone": 0.5, "lfoRate": 0.2, "filterShift": 0.4 },
+  "bright": { "tone": 0.8, "lfoRate": 0.35, "filterShift": 0.55 },
+  "dark": { "tone": 0.3, "lfoRate": 0.15, "filterShift": 0.2 },
+  "stormy": { "tone": 0.45, "lfoRate": 0.6, "filterShift": 0.7 }
+}
