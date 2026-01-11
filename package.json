@@ -1,0 +1,5 @@
+{
+  "name": "techno__peace",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
