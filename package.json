@@ -1,0 +1,15 @@
+{
+  "name": "technopeace-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "uvicorn main:app --reload --port 8080 --app-dir apps/api",
+    "dev": "npm run dev:web",
+    "build:web": "npm run build --workspace apps/web"
+  }
+}
