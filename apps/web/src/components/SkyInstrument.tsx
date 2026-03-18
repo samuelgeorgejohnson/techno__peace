@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useAudioEngine } from "../hooks/useAudioEngine";
 
 function clamp01(x: number) {
@@ -12,9 +12,6 @@ export default function SkyInstrument() {
   const { start, update, isRunning } = useAudioEngine();
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
-  const [hasInteracted, setHasInteracted] = useState(false);
-
-  const overlayVisible = useMemo(() => !hasInteracted, [hasInteracted]);
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -31,7 +28,6 @@ export default function SkyInstrument() {
     const { x, y } = getXY(e);
     const pressure = clamp01((e.pressure || 0.5) * 1.0);
 
-    setHasInteracted(true);
     setPt({ x, y, pressure });
 
     await start();
@@ -64,6 +60,7 @@ export default function SkyInstrument() {
         position: "relative",
         width: "100vw",
         height: "100vh",
+        minHeight: "100dvh",
         overflow: "hidden",
         touchAction: "none",
         userSelect: "none",
@@ -72,6 +69,16 @@ export default function SkyInstrument() {
           "radial-gradient(1200px 700px at 30% 10%, rgba(170, 210, 255, 0.16), transparent 60%), radial-gradient(900px 600px at 70% 40%, rgba(140, 160, 255, 0.14), transparent 62%), linear-gradient(180deg, rgba(10,12,22,1) 0%, rgba(6,7,14,1) 100%)",
       }}
     >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(500px 500px at 50% 50%, rgba(130, 180, 255, 0.06), transparent 70%)",
+          pointerEvents: "none",
+        }}
+      />
+
       <div
         style={{
           position: "absolute",
@@ -94,7 +101,7 @@ export default function SkyInstrument() {
         style={{
           position: "absolute",
           right: 16,
-          bottom: 16,
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
           padding: "10px 12px",
           borderRadius: 14,
           background: "rgba(0,0,0,0.35)",
@@ -112,45 +119,6 @@ export default function SkyInstrument() {
         </div>
         <div>pressure: {pt.pressure.toFixed(2)}</div>
       </div>
-
-      {overlayVisible && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "grid",
-            placeItems: "center",
-            background: "rgba(0,0,0,0.15)",
-            backdropFilter: "blur(2px)",
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              textAlign: "center",
-              padding: 18,
-              borderRadius: 18,
-              background: "rgba(0,0,0,0.35)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              color: "rgba(255,255,255,0.9)",
-              width: "min(360px, 86vw)",
-            }}
-          >
-            <div style={{ letterSpacing: "0.18em", fontSize: 12, opacity: 0.8 }}>
-              SKY MODE
-            </div>
-            <div style={{ fontSize: 20, marginTop: 10, fontWeight: 600 }}>
-              Tap & drag anywhere
-            </div>
-            <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
-              First touch starts audio. Move to shape tone and texture.
-            </div>
-            <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-              (Tap to dismiss)
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
