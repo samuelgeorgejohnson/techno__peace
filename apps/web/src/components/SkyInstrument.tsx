@@ -1,5 +1,6 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAudioEngine } from "../hooks/useAudioEngine";
+import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
@@ -9,12 +10,29 @@ type Pt = { x: number; y: number; pressure: number };
 
 export default function SkyInstrument() {
   const elRef = useRef<HTMLDivElement | null>(null);
-  const { start, update, isRunning } = useAudioEngine();
+  const { start, update, stop, isRunning } = useAudioEngine();
+  const weather = useCurrentWeatherSignal();
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
   const [hasInteracted, setHasInteracted] = useState(false);
 
   const overlayVisible = useMemo(() => !hasInteracted, [hasInteracted]);
+
+  function audioParams(nextPt: Pt) {
+    return {
+      ...nextPt,
+      cloudCover: weather.cloudCover,
+      windMps: weather.windMps,
+      sunAltitudeDeg: weather.sunAltitudeDeg,
+      moonPhase: weather.moonPhase,
+      temperatureC: weather.temperatureC,
+    };
+  }
+
+  useEffect(() => {
+    if (!isRunning) return;
+    update(audioParams(pt));
+  }, [isRunning, pt, update, weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -35,7 +53,7 @@ export default function SkyInstrument() {
     setPt({ x, y, pressure });
 
     await start();
-    update({ x, y, pressure });
+    update(audioParams({ x, y, pressure }));
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -44,13 +62,19 @@ export default function SkyInstrument() {
     const pressure = clamp01((e.pressure || 0.5) * 1.0);
 
     setPt({ x, y, pressure });
-    update({ x, y, pressure });
+    update(audioParams({ x, y, pressure }));
   }
 
   function onPointerUp(e: React.PointerEvent) {
     const { x, y } = getXY(e);
     setPt((p) => ({ ...p, x, y, pressure: 0 }));
-    update({ x, y, pressure: 0 });
+    update(audioParams({ x, y, pressure: 0 }));
+    stop();
+  }
+
+  function onPointerLeave() {
+    setPt((p) => ({ ...p, pressure: 0 }));
+    stop();
   }
 
   return (
@@ -60,6 +84,7 @@ export default function SkyInstrument() {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={onPointerLeave}
       style={{
         position: "relative",
         width: "100vw",
@@ -111,6 +136,13 @@ export default function SkyInstrument() {
           x: {pt.x.toFixed(2)} y: {pt.y.toFixed(2)}
         </div>
         <div>pressure: {pt.pressure.toFixed(2)}</div>
+        <div>weather: {weather.status}</div>
+        <div>
+          cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
+        </div>
+        <div>
+          temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
+        </div>
       </div>
 
       {overlayVisible && (
@@ -143,7 +175,7 @@ export default function SkyInstrument() {
               Tap & drag anywhere
             </div>
             <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
-              First touch starts audio. Move to shape tone and texture.
+              First touch starts audio. Move to shape tone while live weather colors the field.
             </div>
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
               (Tap to dismiss)

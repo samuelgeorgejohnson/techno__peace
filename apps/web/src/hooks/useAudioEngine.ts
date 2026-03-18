@@ -4,6 +4,11 @@ export type AudioParams = {
   x: number;
   y: number;
   pressure: number;
+  cloudCover: number;
+  windMps: number;
+  sunAltitudeDeg: number;
+  moonPhase: number;
+  temperatureC: number;
 };
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -25,16 +30,35 @@ export function useAudioEngine() {
   const lfoGainRef = useRef<GainNode | null>(null);
 
   const startedRef = useRef(false);
+  const stopTimeoutRef = useRef<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
 
+  function resetGraph() {
+    oscRef.current = null;
+    subRef.current = null;
+    noiseSrcRef.current = null;
+    filterRef.current = null;
+    gainRef.current = null;
+    noiseGainRef.current = null;
+    lfoRef.current = null;
+    lfoGainRef.current = null;
+    startedRef.current = false;
+  }
+
   function ensureContext(): AudioContext {
-    if (ctxRef.current) return ctxRef.current;
+    if (ctxRef.current && ctxRef.current.state !== "closed") return ctxRef.current;
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     ctxRef.current = ctx;
+    resetGraph();
     return ctx;
   }
 
   async function start() {
+    if (stopTimeoutRef.current !== null) {
+      window.clearTimeout(stopTimeoutRef.current);
+      stopTimeoutRef.current = null;
+    }
+
     if (startedRef.current) {
       const ctx = ensureContext();
       if (ctx.state !== "running") await ctx.resume();
@@ -105,7 +129,7 @@ export function useAudioEngine() {
     lfo.start();
 
     startedRef.current = true;
-    setIsRunning(true);
+    setIsRunning(ctx.state === "running");
   }
 
   function update(p: AudioParams) {
@@ -115,16 +139,21 @@ export function useAudioEngine() {
     const x = clamp(p.x);
     const y = clamp(p.y);
     const pressure = clamp(p.pressure);
+    const cloudCover = clamp(p.cloudCover);
+    const windNorm = clamp(p.windMps / 20);
+    const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
+    const moonPhase = clamp(p.moonPhase);
+    const tempNorm = clamp((p.temperatureC + 10) / 40);
 
-    const baseHz = 55 + 220 * Math.pow(x, 1.6);
+    const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
     const subHz = baseHz / 2;
 
-    const cutoff = 300 + 5200 * Math.pow(1 - y, 1.8);
-    const noiseAmt = 0.02 + 0.18 * pressure + 0.12 * (1 - y);
-    const master = 0.04 + 0.1 * pressure;
+    const cutoff = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
+    const noiseAmt = 0.015 + 0.22 * windNorm + 0.1 * cloudCover + 0.08 * pressure;
+    const master = 0.035 + 0.08 * (1 - cloudCover) + 0.07 * pressure;
 
-    const lfoRate = 0.05 + 1.2 * Math.pow(1 - y, 1.2);
-    const lfoDepth = 0.01 + 0.06 * pressure;
+    const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
+    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure;
 
     const now = ctx.currentTime;
 
@@ -148,7 +177,11 @@ export function useAudioEngine() {
       gainRef.current.gain.setTargetAtTime(0.0001, now, 0.05);
     }
 
-    setTimeout(async () => {
+    if (stopTimeoutRef.current !== null) {
+      window.clearTimeout(stopTimeoutRef.current);
+    }
+
+    stopTimeoutRef.current = window.setTimeout(async () => {
       try {
         await ctx.suspend();
         setIsRunning(false);
@@ -160,6 +193,10 @@ export function useAudioEngine() {
 
   useEffect(() => {
     return () => {
+      if (stopTimeoutRef.current !== null) {
+        window.clearTimeout(stopTimeoutRef.current);
+      }
+
       const ctx = ctxRef.current;
       if (!ctx) return;
       try {
@@ -168,6 +205,8 @@ export function useAudioEngine() {
         // ignore
       }
       ctxRef.current = null;
+      resetGraph();
+      setIsRunning(false);
     };
   }, []);
 
