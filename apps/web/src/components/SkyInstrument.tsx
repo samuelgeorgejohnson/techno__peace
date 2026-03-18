@@ -6,6 +6,49 @@ function clamp01(x: number) {
 }
 
 type Pt = { x: number; y: number; pressure: number };
+type Channel = { id: string; name: string; detail: string; level: number };
+type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
+
+const initialMixerPages: MixerPage[] = [
+  {
+    id: "weather",
+    title: "Weather channels",
+    blurb: "Blend the sky's natural voices into the instrument.",
+    channels: [
+      { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets", level: 74 },
+      { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
+      { id: "thunder", name: "Thunder", detail: "Low rolls and distant strikes", level: 36 },
+      { id: "waves", name: "Waves", detail: "Slow surf and shoreline wash", level: 44 },
+    ],
+  },
+  {
+    id: "man-made",
+    title: "Man-made channels",
+    blurb: "Shape the urban and mechanical layers around the weather bed.",
+    channels: [
+      { id: "train", name: "Train", detail: "Steel rhythm and rail hum", level: 29 },
+      { id: "traffic", name: "Traffic", detail: "Passing tires and city motion", level: 52 },
+      { id: "factory", name: "Factory", detail: "Machine drones and clanks", level: 24 },
+      { id: "harbor", name: "Harbor", detail: "Buoys, horns, and distant engines", level: 33 },
+    ],
+  },
+];
+
+function FadersIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M6 4V20M12 4V20M18 4V20"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <rect x="4" y="7" width="4" height="4" rx="1.2" fill="currentColor" />
+      <rect x="10" y="13" width="4" height="4" rx="1.2" fill="currentColor" />
+      <rect x="16" y="9" width="4" height="4" rx="1.2" fill="currentColor" />
+    </svg>
+  );
+}
 
 export default function SkyInstrument() {
   const elRef = useRef<HTMLDivElement | null>(null);
@@ -13,8 +56,15 @@ export default function SkyInstrument() {
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [mixerOpen, setMixerOpen] = useState(false);
+  const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
+  const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
 
   const overlayVisible = useMemo(() => !hasInteracted, [hasInteracted]);
+  const activePage = useMemo(
+    () => mixerPages.find((page) => page.id === activePageId) ?? mixerPages[0],
+    [activePageId, mixerPages],
+  );
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -26,6 +76,8 @@ export default function SkyInstrument() {
   }
 
   async function onPointerDown(e: React.PointerEvent) {
+    if (mixerOpen) return;
+
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
 
     const { x, y } = getXY(e);
@@ -39,7 +91,7 @@ export default function SkyInstrument() {
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (e.buttons === 0) return;
+    if (mixerOpen || e.buttons === 0) return;
     const { x, y } = getXY(e);
     const pressure = clamp01((e.pressure || 0.5) * 1.0);
 
@@ -48,9 +100,29 @@ export default function SkyInstrument() {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (mixerOpen) return;
     const { x, y } = getXY(e);
     setPt((p) => ({ ...p, x, y, pressure: 0 }));
     update({ x, y, pressure: 0 });
+  }
+
+  function stopMixerEvent(e: React.PointerEvent | React.MouseEvent) {
+    e.stopPropagation();
+  }
+
+  function updateChannelLevel(pageId: string, channelId: string, level: number) {
+    setMixerPages((pages) =>
+      pages.map((page) =>
+        page.id !== pageId
+          ? page
+          : {
+              ...page,
+              channels: page.channels.map((channel) =>
+                channel.id === channelId ? { ...channel, level } : channel,
+              ),
+            },
+      ),
+    );
   }
 
   return (
@@ -72,6 +144,45 @@ export default function SkyInstrument() {
           "radial-gradient(1200px 700px at 30% 10%, rgba(170, 210, 255, 0.16), transparent 60%), radial-gradient(900px 600px at 70% 40%, rgba(140, 160, 255, 0.14), transparent 62%), linear-gradient(180deg, rgba(10,12,22,1) 0%, rgba(6,7,14,1) 100%)",
       }}
     >
+      <button
+        type="button"
+        onPointerDown={stopMixerEvent}
+        onClick={(e) => {
+          e.stopPropagation();
+          setMixerOpen((open) => !open);
+        }}
+        aria-label={mixerOpen ? "Close mixer" : "Open mixer"}
+        style={{
+          position: "absolute",
+          top: 18,
+          right: 18,
+          zIndex: 3,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "12px 14px",
+          borderRadius: 16,
+          border: "1px solid rgba(255,255,255,0.14)",
+          background: mixerOpen ? "rgba(102, 156, 255, 0.24)" : "rgba(0,0,0,0.35)",
+          color: "rgba(255,255,255,0.94)",
+          boxShadow: "0 12px 30px rgba(0, 0, 0, 0.25)",
+          backdropFilter: "blur(12px)",
+          cursor: "pointer",
+        }}
+      >
+        <FadersIcon />
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}
+        >
+          Mixer
+        </span>
+      </button>
+
       <div
         style={{
           position: "absolute",
@@ -86,7 +197,7 @@ export default function SkyInstrument() {
           transform: `scale(${1 + pt.pressure * 0.8})`,
           transition: "transform 40ms linear",
           pointerEvents: "none",
-          opacity: 0.9,
+          opacity: mixerOpen ? 0.35 : 0.9,
         }}
       />
 
@@ -113,8 +224,198 @@ export default function SkyInstrument() {
         <div>pressure: {pt.pressure.toFixed(2)}</div>
       </div>
 
-      {overlayVisible && (
+      {mixerOpen && activePage && (
         <div
+          onPointerDown={stopMixerEvent}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2,
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: "rgba(4, 6, 14, 0.48)",
+            backdropFilter: "blur(14px)",
+          }}
+        >
+          <div
+            style={{
+              width: "min(960px, 100%)",
+              minHeight: "min(620px, 100%)",
+              borderRadius: 28,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background:
+                "linear-gradient(180deg, rgba(14, 20, 38, 0.92), rgba(9, 14, 28, 0.92))",
+              boxShadow: "0 32px 60px rgba(0,0,0,0.35)",
+              padding: 28,
+              display: "grid",
+              gap: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    letterSpacing: "0.18em",
+                    textTransform: "uppercase",
+                    color: "rgba(182, 208, 255, 0.74)",
+                  }}
+                >
+                  Mixer pages
+                </div>
+                <h2
+                  style={{
+                    margin: "10px 0 6px",
+                    fontSize: "clamp(28px, 4vw, 42px)",
+                    color: "white",
+                  }}
+                >
+                  {activePage.title}
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    maxWidth: 540,
+                    lineHeight: 1.5,
+                    color: "rgba(255,255,255,0.72)",
+                  }}
+                >
+                  {activePage.blurb}
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {mixerPages.map((page) => {
+                  const isActive = page.id === activePage.id;
+                  return (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onPointerDown={stopMixerEvent}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActivePageId(page.id);
+                      }}
+                      style={{
+                        padding: "12px 16px",
+                        borderRadius: 14,
+                        border: isActive
+                          ? "1px solid rgba(140,200,255,0.45)"
+                          : "1px solid rgba(255,255,255,0.10)",
+                        background: isActive ? "rgba(120, 168, 255, 0.2)" : "rgba(255,255,255,0.04)",
+                        color: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {page.title}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: 18,
+                alignItems: "end",
+              }}
+            >
+              {activePage.channels.map((channel) => (
+                <div
+                  key={channel.id}
+                  style={{
+                    padding: 18,
+                    borderRadius: 22,
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(255,255,255,0.04)",
+                    minHeight: 320,
+                    display: "grid",
+                    gap: 12,
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: "0.15em",
+                        textTransform: "uppercase",
+                        color: "rgba(177, 206, 255, 0.76)",
+                      }}
+                    >
+                      Channel
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: 22, color: "white", fontWeight: 600 }}>
+                      {channel.name}
+                    </div>
+                    <div style={{ marginTop: 8, color: "rgba(255,255,255,0.68)", lineHeight: 1.45 }}>
+                      {channel.detail}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      color: "rgba(255,255,255,0.82)",
+                    }}
+                  >
+                    <span>Level</span>
+                    <strong>{channel.level}%</strong>
+                  </div>
+
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={channel.level}
+                    onPointerDown={stopMixerEvent}
+                    onChange={(e) =>
+                      updateChannelLevel(activePage.id, channel.id, Number(e.currentTarget.value))
+                    }
+                    aria-label={`${channel.name} level`}
+                    style={{ writingMode: "vertical-lr", width: "100%", height: 160 }}
+                  />
+
+                  <div
+                    style={{
+                      marginTop: "auto",
+                      height: 10,
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.08)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${channel.level}%`,
+                        height: "100%",
+                        background:
+                          "linear-gradient(90deg, rgba(120, 176, 255, 0.85), rgba(182, 214, 255, 0.95))",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {overlayVisible && !mixerOpen && (
+        <div
+          onPointerDown={stopMixerEvent}
           style={{
             position: "absolute",
             inset: 0,
@@ -146,7 +447,7 @@ export default function SkyInstrument() {
               First touch starts audio. Move to shape tone and texture.
             </div>
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-              (Tap to dismiss)
+              Use the mixer icon to open dedicated sound-channel pages.
             </div>
           </div>
         </div>
