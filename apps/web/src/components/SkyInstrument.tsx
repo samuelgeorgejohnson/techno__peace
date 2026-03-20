@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import DiagnosticsOverlay from "./DiagnosticsOverlay";
+import MixerOverlay from "./MixerOverlay";
 import { useAudioEngine } from "../hooks/useAudioEngine";
 import { useWeatherDiagnostics } from "../hooks/useWeatherDiagnostics";
 
@@ -12,6 +13,7 @@ type Pt = { x: number; y: number; pressure: number };
 export default function SkyInstrument() {
   const elRef = useRef<HTMLDivElement | null>(null);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [mixerOpen, setMixerOpen] = useState(false);
   const { state, mapping, refreshWeather } = useWeatherDiagnostics();
   const { start, update, isRunning, debugState } = useAudioEngine(mapping);
 
@@ -84,7 +86,7 @@ export default function SkyInstrument() {
       <button
         onClick={(event) => {
           event.stopPropagation();
-          setDiagnosticsOpen(true);
+          setMixerOpen(true);
         }}
         style={{
           position: "absolute",
@@ -102,7 +104,7 @@ export default function SkyInstrument() {
           boxShadow: "0 10px 24px rgba(0,0,0,0.25)",
         }}
       >
-        DEBUG
+        MIXER
       </button>
 
       <div
@@ -180,13 +182,22 @@ export default function SkyInstrument() {
               Tap & drag anywhere
             </div>
             <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
-              First touch starts audio. Move to shape tone and texture. DEBUG opens the raw weather/audio truth view.
+              First touch starts audio. Move to shape tone and texture. Open MIXER for weather routing details and diagnostics.
             </div>
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
               (Tap to dismiss)
             </div>
           </div>
         </div>
+      )}
+
+      {mixerOpen && (
+        <MixerOverlay
+          mapping={mapping}
+          channelStatus={debugState.channelStatus}
+          onClose={() => setMixerOpen(false)}
+          onOpenDiagnostics={() => setDiagnosticsOpen(true)}
+        />
       )}
 
       {diagnosticsOpen && (
