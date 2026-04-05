@@ -9,6 +9,11 @@ export type AudioParams = {
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
+
+  rainMm: number;
+  precipitationMm: number;
+  dailyRainMm: number;
+  showersMm: number;
 };
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -144,18 +149,46 @@ export function useAudioEngine() {
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
-
+    const rainNorm = clamp((p.rainMm + p.showersMm) / 5); 
+    
     const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
     const subHz = baseHz / 2;
 
     const cutoff = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
-    const noiseAmt = 0.015 + 0.22 * windNorm + 0.1 * cloudCover + 0.08 * pressure;
+    const noiseAmt =
+  0.01 +
+  0.18 * windNorm +
+  0.08 * cloudCover +
+  0.05 * pressure +
+  0.6 * rainNorm;
     const master = 0.035 + 0.08 * (1 - cloudCover) + 0.07 * pressure;
 
     const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
     const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure;
 
     const now = ctx.currentTime;
+
+// 🌧️ rain droplets (random ticks)
+if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
+  const click = ctx.createOscillator();
+  const clickGain = ctx.createGain();
+
+  click.type = "triangle";
+  click.frequency.value = 800 + Math.random() * 1200;
+
+  clickGain.gain.value = 0.0001;
+
+  click.connect(clickGain);
+  clickGain.connect(filterRef.current!);
+
+  const t = now;
+  clickGain.gain.setValueAtTime(0.0001, t);
+  clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+  click.start(t);
+  click.stop(t + 0.1);
+}
 
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, 0.015);
     subRef.current?.frequency.setTargetAtTime(subHz, now, 0.02);
