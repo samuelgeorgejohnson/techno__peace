@@ -6,6 +6,7 @@ export type AudioParams = {
   pressure: number;
   cloudCover: number;
   windMps: number;
+  humidityPct: number;
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
@@ -146,25 +147,35 @@ export function useAudioEngine() {
     const pressure = clamp(p.pressure);
     const cloudCover = clamp(p.cloudCover);
     const windNorm = clamp(p.windMps / 20);
+    const humidityNorm = clamp(p.humidityPct / 100);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
-    const rainNorm = clamp((p.rainMm + p.showersMm) / 5); 
+    const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
+    const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
+    const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
     const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
     const subHz = baseHz / 2;
 
-    const cutoff = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
+    const cutoffBase = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
+    const cutoff = cutoffBase * (1 - 0.22 * humidityNorm);
+    const filterQ = 0.78 - 0.35 * humidityNorm;
     const noiseAmt =
-  0.01 +
-  0.18 * windNorm +
-  0.08 * cloudCover +
-  0.05 * pressure +
-  0.6 * rainNorm;
-    const master = 0.035 + 0.08 * (1 - cloudCover) + 0.07 * pressure;
+      (0.01 +
+        0.18 * windNorm +
+        0.08 * cloudCover +
+        0.05 * pressure +
+        0.6 * rainNorm) *
+      (1 - 0.22 * humidityNorm);
+    const master =
+      0.032 + 0.075 * (1 - cloudCover) + 0.07 * pressure + 0.018 * wetness;
 
     const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
-    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure;
+    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure + 0.03 * diffusion;
+    const pitchSmoothing = 0.015 + 0.03 * diffusion;
+    const toneSmoothing = 0.02 + 0.055 * diffusion;
+    const gainSmoothing = 0.03 + 0.045 * wetness;
 
     const now = ctx.currentTime;
 
@@ -190,12 +201,13 @@ if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
   click.stop(t + 0.1);
 }
 
-    oscRef.current?.frequency.setTargetAtTime(baseHz, now, 0.015);
-    subRef.current?.frequency.setTargetAtTime(subHz, now, 0.02);
-    filterRef.current?.frequency.setTargetAtTime(cutoff, now, 0.02);
+    oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
+    subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
+    filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
+    filterRef.current?.Q.setTargetAtTime(filterQ, now, toneSmoothing);
 
-    noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, 0.03);
-    gainRef.current?.gain.setTargetAtTime(master, now, 0.03);
+    noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
+    gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
