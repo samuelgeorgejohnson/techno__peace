@@ -86,13 +86,16 @@ export default function SkyInstrument() {
       sunAltitudeDeg: weather.sunAltitudeDeg,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
+      rainMm: weather.rainMm,
+      precipitationMm: weather.precipitationMm,
+      dailyRainMm: weather.dailyRainMm,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -326,6 +329,9 @@ export default function SkyInstrument() {
         <div>
           cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
         </div>
+        <div>rain: {weather.rainMm.toFixed(2)} mm</div>
+        <div>precip: {weather.precipitationMm.toFixed(2)} mm</div>
+        <div>daily rain: {weather.dailyRainMm.toFixed(2)} mm</div>
         <div>
           temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
         </div>

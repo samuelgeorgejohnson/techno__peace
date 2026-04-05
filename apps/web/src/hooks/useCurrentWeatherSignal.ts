@@ -10,6 +10,9 @@ export type WeatherSignal = {
   isDay: boolean;
   latitude: number;
   longitude: number;
+  rainMm: number;
+  precipitationMm: number;
+  dailyRainMm: number;
   status: "idle" | "loading" | "live" | "fallback" | "error";
 };
 
@@ -27,6 +30,9 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   isDay: true,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
+  rainMm: 0,
+  precipitationMm: 0,
+  dailyRainMm: 0,
   status: "idle",
 };
 
@@ -91,8 +97,8 @@ export function useCurrentWeatherSignal() {
         longitude: coords.lon.toString(),
         timezone: "auto",
         forecast_days: "1",
-        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day",
-        daily: "sunrise,sunset",
+        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day,precipitation,rain,showers",
+        daily: "sunrise,sunset,precipitation_sum,rain_sum,showers_sum",
       });
 
       try {
@@ -121,6 +127,9 @@ export function useCurrentWeatherSignal() {
           isDay: Boolean(current.is_day),
           latitude: coords.lat,
           longitude: coords.lon,
+          rainMm: Number(current.rain) || 0,
+          precipitationMm: Number(current.precipitation) || 0,
+          dailyRainMm: Number(daily.rain_sum?.[0]) || 0,
           status: "live",
         });
       } catch (error) {
