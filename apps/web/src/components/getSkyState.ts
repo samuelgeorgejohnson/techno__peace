@@ -63,43 +63,68 @@ export function getSkyState({
   else if (sun >= 6 && sun < 18) phase = "golden-hour";
   else if (sun >= 18) phase = "full-day";
 
+  const isNight = sun < -6;
   const dayLift = smoothstep(-10, 20, sun);
-  const noonLift = smoothstep(10, 55, sun);
-  const duskDrop = smoothstep(4, -12, sun);
-  const brightness = clamp01(0.08 + 0.55 * dayLift + 0.42 * noonLift - 0.15 * duskDrop);
-
-  const horizonWarmth = Math.max(smoothstep(-8, 4, sun), smoothstep(4, -8, sun));
-  const goldenWarmth = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
   const dayBlue = smoothstep(8, 45, sun);
 
-  const nightTop: [number, number, number] = [8, 12, 24];
-  const dawnTop: [number, number, number] = [34, 53, 92];
-  const dayTop: [number, number, number] = [74, 139, 226];
+  const horizonWarmthBase = Math.max(smoothstep(-8, 4, sun), smoothstep(4, -8, sun));
+  const goldenWarmthBase = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
 
-  const nightMid: [number, number, number] = [16, 22, 38];
-  const dawnMid: [number, number, number] = [77, 105, 162];
-  const dayMid: [number, number, number] = [126, 182, 244];
+  const overcast = smoothstep(0.45, 1, cloud);
 
-  const nightHorizon: [number, number, number] = [30, 28, 44];
-  const dawnHorizon: [number, number, number] = [222, 144, 112];
-  const dayHorizon: [number, number, number] = [186, 214, 252];
+  const nightTop: [number, number, number] = [7, 11, 20];
+  const nightMid: [number, number, number] = [14, 20, 32];
+  const nightHorizon: [number, number, number] = [20, 24, 34];
 
-  const topBase = blendRgb(blendRgb(nightTop, dawnTop, dayLift), dayTop, dayBlue);
-  const midBase = blendRgb(blendRgb(nightMid, dawnMid, dayLift), dayMid, dayBlue);
-  const horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, horizonWarmth), dayHorizon, dayBlue);
+  const dawnTop: [number, number, number] = [42, 58, 92];
+  const dawnMid: [number, number, number] = [84, 101, 138];
+  const dawnHorizon: [number, number, number] = [186, 138, 118];
 
-  const overcastTint: [number, number, number] = [132, 145, 166];
-  const cloudMute = smoothstep(0.35, 1, cloud) * 0.58;
+  const dayTop: [number, number, number] = [116, 168, 224];
+  const dayMid: [number, number, number] = [170, 202, 235];
+  const dayHorizon: [number, number, number] = [214, 228, 243];
 
-  const topColor = toRgbString(blendRgb(topBase, overcastTint, cloudMute));
-  const midColor = toRgbString(blendRgb(midBase, overcastTint, cloudMute * 0.85));
-  const horizonColor = toRgbString(blendRgb(horizonBase, overcastTint, cloudMute * 0.65));
+  let topBase = blendRgb(blendRgb(nightTop, dawnTop, dayLift), dayTop, dayBlue);
+  let midBase = blendRgb(blendRgb(nightMid, dawnMid, dayLift), dayMid, dayBlue);
+  let horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, horizonWarmthBase), dayHorizon, dayBlue);
 
-  const cloudDensity = cloud < 0.34 ? "low" : cloud < 0.68 ? "medium" : "high";
+  if (isNight) {
+    const nightDepth = smoothstep(-6, -30, sun);
+    topBase = blendRgb(topBase, nightTop, 0.65 + 0.35 * nightDepth);
+    midBase = blendRgb(midBase, nightMid, 0.65 + 0.35 * nightDepth);
+    horizonBase = blendRgb(horizonBase, nightHorizon, 0.7 + 0.3 * nightDepth);
+  }
+
+  const overcastTop: [number, number, number] = isNight ? [20, 24, 32] : [128, 138, 148];
+  const overcastMid: [number, number, number] = isNight ? [26, 30, 38] : [144, 152, 160];
+  const overcastHorizon: [number, number, number] = isNight ? [30, 34, 40] : [158, 162, 166];
+
+  topBase = blendRgb(topBase, overcastTop, overcast * 0.78);
+  midBase = blendRgb(midBase, overcastMid, overcast * 0.72);
+  horizonBase = blendRgb(horizonBase, overcastHorizon, overcast * 0.64);
+
+  const horizonWarmth = horizonWarmthBase * (1 - overcast * 0.9);
+  const goldenWarmth = goldenWarmthBase * (1 - overcast * 0.95);
+
+  const brightnessBase = isNight
+    ? 0.08 + smoothstep(-18, -6, sun) * 0.08
+    : 0.3 + 0.55 * dayLift;
+
+  const brightness = clamp01(brightnessBase * (1 - cloud * 0.38));
+
+  const topColor = toRgbString(topBase);
+  const midColor = toRgbString(midBase);
+  const horizonColor = toRgbString(horizonBase);
+
+  const cloudDensity = cloud < 0.28 ? "low" : cloud < 0.7 ? "medium" : "high";
   const cloudOpacity =
-    cloudDensity === "low" ? 0.14 + cloud * 0.2 : cloudDensity === "medium" ? 0.26 + cloud * 0.33 : 0.48 + cloud * 0.35;
+    cloudDensity === "low"
+      ? 0.08 + cloud * 0.15
+      : cloudDensity === "medium"
+        ? 0.18 + cloud * 0.24
+        : 0.42 + cloud * 0.26;
 
-  const cloudSpeed = 8 + wind * 4.8;
+  const cloudSpeed = 10 + wind * 5.5;
 
   return {
     topColor,

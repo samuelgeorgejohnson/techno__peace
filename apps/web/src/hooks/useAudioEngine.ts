@@ -5,6 +5,7 @@ export type AudioParams = {
   y: number;
   pressure: number;
   cloudCover: number;
+  rainMm: number;
   windMps: number;
   sunAltitudeDeg: number;
   moonPhase: number;
@@ -140,6 +141,7 @@ export function useAudioEngine() {
     const y = clamp(p.y);
     const pressure = clamp(p.pressure);
     const cloudCover = clamp(p.cloudCover);
+    const rainNorm = clamp(p.rainMm / 3);
     const windNorm = clamp(p.windMps / 20);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonPhase = clamp(p.moonPhase);
@@ -148,9 +150,9 @@ export function useAudioEngine() {
     const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
     const subHz = baseHz / 2;
 
-    const cutoff = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
-    const noiseAmt = 0.015 + 0.22 * windNorm + 0.1 * cloudCover + 0.08 * pressure;
-    const master = 0.035 + 0.08 * (1 - cloudCover) + 0.07 * pressure;
+    const cutoff = 220 + 2500 * windNorm + 2200 * Math.pow(1 - y, 1.8) - 280 * rainNorm;
+    const noiseAmt = 0.015 + 0.22 * windNorm + 0.1 * cloudCover + 0.16 * rainNorm + 0.08 * pressure;
+    const master = 0.035 + 0.08 * (1 - cloudCover) + 0.05 * rainNorm + 0.07 * pressure;
 
     const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
     const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure;
