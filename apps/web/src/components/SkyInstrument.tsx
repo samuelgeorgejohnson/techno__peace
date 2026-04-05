@@ -77,11 +77,18 @@ export default function SkyInstrument() {
       }),
     [weather.cloudCover, weather.sunAltitudeDeg, weather.windMps],
   );
+  const rainVisual = useMemo(() => {
+    if (weather.rainMm <= 0) return { opacity: 0, speedSec: 1.4, blur: 0.4 };
+    if (weather.rainMm < 0.5) return { opacity: 0.18, speedSec: 1.05, blur: 0.35 };
+    if (weather.rainMm < 2) return { opacity: 0.3, speedSec: 0.8, blur: 0.25 };
+    return { opacity: 0.42, speedSec: 0.58, blur: 0.18 };
+  }, [weather.rainMm]);
 
   function audioParams(nextPt: Pt) {
     return {
       ...nextPt,
       cloudCover: weather.cloudCover,
+      rainMm: weather.rainMm,
       windMps: weather.windMps,
       sunAltitudeDeg: weather.sunAltitudeDeg,
       moonPhase: weather.moonPhase,
@@ -92,7 +99,7 @@ export default function SkyInstrument() {
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, pt, update, weather.cloudCover, weather.moonPhase, weather.rainMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -176,13 +183,14 @@ export default function SkyInstrument() {
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
-        filter: `brightness(${0.72 + sky.brightness * 0.52})`,
+        filter: `brightness(${0.42 + sky.brightness * 0.42})`,
         transition: "background 900ms ease, filter 900ms ease",
       }}
     >
       <style>
         {`@keyframes tp-cloud-drift-a { from { transform: translateX(-8%); } to { transform: translateX(8%); } }
-          @keyframes tp-cloud-drift-b { from { transform: translateX(10%); } to { transform: translateX(-10%); } }`}
+          @keyframes tp-cloud-drift-b { from { transform: translateX(10%); } to { transform: translateX(-10%); } }
+          @keyframes tp-rain-fall { from { transform: translateY(-4%); } to { transform: translateY(4%); } }`}
       </style>
       <div
         aria-hidden="true"
@@ -191,7 +199,7 @@ export default function SkyInstrument() {
           inset: "-6% -8% 24%",
           pointerEvents: "none",
           background: `radial-gradient(1200px 420px at 50% 98%, rgba(255, 156, 108, ${0.08 + sky.horizonWarmth * 0.33}), rgba(255, 176, 120, 0) 72%)`,
-          opacity: 0.85,
+          opacity: (1 - weather.cloudCover) * 0.85,
           zIndex: 0,
           mixBlendMode: "screen",
         }}
@@ -203,7 +211,7 @@ export default function SkyInstrument() {
           inset: "-8% -8% -4%",
           pointerEvents: "none",
           background: `radial-gradient(1000px 520px at 50% 88%, rgba(255, 184, 128, ${0.06 + sky.goldenWarmth * 0.3}), rgba(255, 184, 128, 0) 72%)`,
-          opacity: 0.9,
+          opacity: (1 - weather.cloudCover) * 0.9,
           zIndex: 0,
           mixBlendMode: "screen",
         }}
@@ -219,10 +227,10 @@ export default function SkyInstrument() {
           animation: `tp-cloud-drift-a ${Math.max(24, 170 / sky.cloudSpeed)}s linear infinite`,
           background:
             sky.cloudDensity === "low"
-              ? "radial-gradient(800px 360px at 18% 20%, rgba(255,255,255,0.14), transparent 62%), radial-gradient(900px 380px at 78% 36%, rgba(255,255,255,0.13), transparent 64%)"
+              ? "radial-gradient(800px 360px at 18% 20%, rgba(210,218,228,0.10), transparent 62%), radial-gradient(900px 380px at 78% 36%, rgba(210,218,228,0.10), transparent 64%)"
               : sky.cloudDensity === "medium"
-                ? "linear-gradient(185deg, rgba(255,255,255,0.20) 4%, rgba(255,255,255,0.09) 20%, rgba(255,255,255,0) 34%), radial-gradient(1000px 420px at 16% 26%, rgba(255,255,255,0.16), transparent 66%), radial-gradient(1100px 500px at 74% 34%, rgba(255,255,255,0.15), transparent 70%)"
-                : "linear-gradient(180deg, rgba(225,232,242,0.55) 0%, rgba(210,220,236,0.38) 30%, rgba(190,201,219,0.30) 64%, rgba(184,196,214,0.26) 100%)",
+                ? "linear-gradient(185deg, rgba(190,198,210,0.16) 4%, rgba(176,184,196,0.08) 20%, rgba(255,255,255,0) 34%), radial-gradient(1000px 420px at 16% 26%, rgba(188,196,206,0.15), transparent 66%), radial-gradient(1100px 500px at 74% 34%, rgba(188,196,206,0.13), transparent 70%)"
+                : "linear-gradient(180deg, rgba(154,160,170,0.42) 0%, rgba(144,150,160,0.34) 30%, rgba(132,138,148,0.30) 64%, rgba(126,132,142,0.28) 100%)",
         }}
       />
       <div
@@ -236,8 +244,36 @@ export default function SkyInstrument() {
           animation: `tp-cloud-drift-b ${Math.max(18, 135 / sky.cloudSpeed)}s linear infinite`,
           background:
             sky.cloudDensity === "high"
-              ? "radial-gradient(1200px 520px at 40% 16%, rgba(240,244,250,0.34), transparent 72%), radial-gradient(1200px 540px at 78% 28%, rgba(240,244,250,0.28), transparent 74%)"
-              : "radial-gradient(1200px 520px at 12% 26%, rgba(255,255,255,0.20), transparent 72%), radial-gradient(1200px 560px at 86% 30%, rgba(255,255,255,0.16), transparent 74%)",
+              ? "radial-gradient(1200px 520px at 40% 16%, rgba(168,174,184,0.28), transparent 72%), radial-gradient(1200px 540px at 78% 28%, rgba(160,166,176,0.24), transparent 74%)"
+              : "radial-gradient(1200px 520px at 12% 26%, rgba(205,212,222,0.13), transparent 72%), radial-gradient(1200px 560px at 86% 30%, rgba(205,212,222,0.11), transparent 74%)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "-10%",
+          pointerEvents: "none",
+          zIndex: 1,
+          opacity: rainVisual.opacity,
+          animation: `tp-rain-fall ${rainVisual.speedSec}s linear infinite`,
+          background:
+            "repeating-linear-gradient(102deg, rgba(198,218,236,0.00) 0px, rgba(198,218,236,0.00) 10px, rgba(198,218,236,0.32) 10px, rgba(198,218,236,0.32) 12px, rgba(198,218,236,0.00) 12px, rgba(198,218,236,0.00) 24px)",
+          filter: `blur(${rainVisual.blur}px)`,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "auto -6% -12% -6%",
+          height: "42%",
+          pointerEvents: "none",
+          zIndex: 1,
+          opacity: Math.min(0.45, weather.dailyRainMm / 18),
+          background:
+            "radial-gradient(800px 240px at 20% 68%, rgba(178,208,232,0.24), transparent 72%), radial-gradient(820px 240px at 80% 72%, rgba(170,198,226,0.20), transparent 72%)",
+          mixBlendMode: "screen",
         }}
       />
 
@@ -326,6 +362,10 @@ export default function SkyInstrument() {
         <div>
           cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
         </div>
+        <div>
+          rain: {weather.rainMm.toFixed(2)} mm precip: {weather.precipitationMm.toFixed(2)} mm
+        </div>
+        <div>daily rain: {weather.dailyRainMm.toFixed(1)} mm</div>
         <div>
           temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
         </div>

@@ -7,6 +7,9 @@ export type WeatherSignal = {
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
+  rainMm: number;
+  precipitationMm: number;
+  dailyRainMm: number;
   isDay: boolean;
   latitude: number;
   longitude: number;
@@ -24,6 +27,9 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   sunAltitudeDeg: 12,
   moonPhase: 0.5,
   temperatureC: 18,
+  rainMm: 0,
+  precipitationMm: 0,
+  dailyRainMm: 0,
   isDay: true,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
@@ -91,8 +97,9 @@ export function useCurrentWeatherSignal() {
         longitude: coords.lon.toString(),
         timezone: "auto",
         forecast_days: "1",
-        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day",
-        daily: "sunrise,sunset",
+        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day,precipitation,rain,showers",
+        hourly: "precipitation,rain,showers",
+        daily: "sunrise,sunset,precipitation_sum,rain_sum,showers_sum",
       });
 
       try {
@@ -112,12 +119,22 @@ export function useCurrentWeatherSignal() {
         const sunrise = daily.sunrise?.[0];
         const sunset = daily.sunset?.[0];
 
+        const rainMm = Math.max(Number(current.rain) || 0, 0);
+        const precipitationMm = Math.max(Number(current.precipitation) || 0, 0);
+        const dailyRainMm = Math.max(
+          Number(daily.rain_sum?.[0]) || Number(daily.precipitation_sum?.[0]) || 0,
+          0,
+        );
+
         setSignal({
           cloudCover: clamp((Number(current.cloud_cover) || 0) / 100, 0, 1),
           windMps: Math.max(Number(current.wind_speed_10m) || 0, 0) / 3.6,
           sunAltitudeDeg: estimateSunAltitude(currentTime, sunrise, sunset),
           moonPhase: estimateMoonPhase(new Date(currentTime)),
           temperatureC: Number(current.temperature_2m) || 0,
+          rainMm,
+          precipitationMm,
+          dailyRainMm,
           isDay: Boolean(current.is_day),
           latitude: coords.lat,
           longitude: coords.lon,
