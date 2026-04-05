@@ -4,6 +4,7 @@ import { useLocation } from "@technopeace/codex-map/src/useLocation";
 export type WeatherSignal = {
   cloudCover: number;
   windMps: number;
+  humidityPct: number;
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
@@ -25,6 +26,7 @@ const FALLBACK_COORDS = {
 const DEFAULT_SIGNAL: WeatherSignal = {
   cloudCover: 0.35,
   windMps: 3.2,
+  humidityPct: 58,
   sunAltitudeDeg: 12,
   moonPhase: 0.5,
   temperatureC: 18,
@@ -34,7 +36,7 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   rainMm: 0,
   precipitationMm: 0,
   dailyRainMm: 0,
-  showersMm: number;
+  showersMm: 0,
   status: "idle",
 };
 
@@ -99,7 +101,8 @@ export function useCurrentWeatherSignal() {
         longitude: coords.lon.toString(),
         timezone: "auto",
         forecast_days: "1",
-        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day,precipitation,rain,showers",
+        current:
+          "temperature_2m,cloud_cover,wind_speed_10m,relative_humidity_2m,is_day,precipitation,rain,showers",
         daily: "sunrise,sunset,precipitation_sum,rain_sum,showers_sum",
       });
 
@@ -123,6 +126,7 @@ export function useCurrentWeatherSignal() {
         setSignal({
           cloudCover: clamp((Number(current.cloud_cover) || 0) / 100, 0, 1),
           windMps: Math.max(Number(current.wind_speed_10m) || 0, 0) / 3.6,
+          humidityPct: clamp(Number(current.relative_humidity_2m) || 0, 0, 100),
           sunAltitudeDeg: estimateSunAltitude(currentTime, sunrise, sunset),
           moonPhase: estimateMoonPhase(new Date(currentTime)),
           temperatureC: Number(current.temperature_2m) || 0,
