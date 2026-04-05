@@ -54,16 +54,19 @@ function FadersIcon() {
 
 export default function SkyInstrument() {
   const elRef = useRef<HTMLDivElement | null>(null);
-  const { start, update, stop, isRunning } = useAudioEngine();
+  const fadeFrameRef = useRef<number | null>(null);
+  const { start, update, isRunning } = useAudioEngine();
   const weather = useCurrentWeatherSignal();
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
-  const [hasInteracted, setHasInteracted] = useState(false);
+  const [hasUnlockedAudio, setHasUnlockedAudio] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
 
-  const overlayVisible = useMemo(() => !hasInteracted, [hasInteracted]);
+  const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
+  const dronePressure = 0.58;
   const activePage = useMemo(
     () => mixerPages.find((page) => page.id === activePageId) ?? mixerPages[0],
     [activePageId, mixerPages],
@@ -97,6 +100,15 @@ export default function SkyInstrument() {
     update(audioParams(pt));
   }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
+  useEffect(
+    () => () => {
+      if (fadeFrameRef.current !== null) {
+        cancelAnimationFrame(fadeFrameRef.current);
+      }
+    },
+    [],
+  );
+
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
     if (!el) return { x: 0.5, y: 0.5 };
@@ -106,41 +118,74 @@ export default function SkyInstrument() {
     return { x, y };
   }
 
+  async function unlockAndFadeIn() {
+    if (fadeFrameRef.current !== null) {
+      cancelAnimationFrame(fadeFrameRef.current);
+      fadeFrameRef.current = null;
+    }
+
+    await start();
+
+    const center = { x: 0.5, y: 0.5, pressure: 0 };
+    setPt(center);
+    update(audioParams(center));
+
+    const fadeDurationMs = 900;
+    const fadeStarted = performance.now();
+
+    const tick = (now: number) => {
+      const progress = clamp01((now - fadeStarted) / fadeDurationMs);
+      const pressure = dronePressure * progress;
+      const nextPt = { x: 0.5, y: 0.5, pressure };
+
+      setPt(nextPt);
+      update(audioParams(nextPt));
+
+      if (progress < 1) {
+        fadeFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        fadeFrameRef.current = null;
+      }
+    };
+
+    fadeFrameRef.current = requestAnimationFrame(tick);
+  }
+
   async function onPointerDown(e: React.PointerEvent) {
-    if (mixerOpen) return;
+    if (mixerOpen || !hasUnlockedAudio) return;
 
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
 
     const { x, y } = getXY(e);
-    const pressure = clamp01((e.pressure || 0.5) * 1.0);
+    const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
-    setHasInteracted(true);
+    setIsDragging(true);
     setPt({ x, y, pressure });
-
-    await start();
     update(audioParams({ x, y, pressure }));
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (mixerOpen || e.buttons === 0) return;
+    if (mixerOpen || !hasUnlockedAudio || !isDragging || e.buttons === 0) return;
     const { x, y } = getXY(e);
-    const pressure = clamp01((e.pressure || 0.5) * 1.0);
+    const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
     setPt({ x, y, pressure });
     update(audioParams({ x, y, pressure }));
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (mixerOpen) return;
+    if (mixerOpen || !hasUnlockedAudio) return;
     const { x, y } = getXY(e);
-    setPt((p) => ({ ...p, x, y, pressure: 0 }));
-    update(audioParams({ x, y, pressure: 0 }));
-    stop();
+    setIsDragging(false);
+    setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
+    update(audioParams({ x, y, pressure: dronePressure }));
   }
 
   function onPointerLeave() {
-    setPt((p) => ({ ...p, pressure: 0 }));
-    stop();
+    if (!hasUnlockedAudio) return;
+    setIsDragging(false);
+    setPt((p) => ({ ...p, pressure: dronePressure }));
+    update(audioParams({ ...pt, pressure: dronePressure }));
   }
 
   function stopMixerEvent(e: React.PointerEvent | React.MouseEvent) {
@@ -528,7 +573,6 @@ export default function SkyInstrument() {
 
       {overlayVisible && !mixerOpen && (
         <div
-          onPointerDown={stopMixerEvent}
           style={{
             position: "absolute",
             inset: 0,
@@ -536,7 +580,8 @@ export default function SkyInstrument() {
             placeItems: "center",
             background: "rgba(0,0,0,0.15)",
             backdropFilter: "blur(2px)",
-            pointerEvents: "none",
+            pointerEvents: "auto",
+            zIndex: 4,
           }}
         >
           <div
@@ -554,13 +599,41 @@ export default function SkyInstrument() {
               SKY MODE
             </div>
             <div style={{ fontSize: 20, marginTop: 10, fontWeight: 600 }}>
-              Tap & drag anywhere
+              Place tuning ritual
             </div>
             <div style={{ marginTop: 10, fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
-              First touch starts audio. Move to shape tone while live weather colors the field.
+              Location initializes on open. Press the center resonance to tune this place.
             </div>
+            <button
+              type="button"
+              onPointerDown={stopMixerEvent}
+              onClick={() => {
+                if (hasUnlockedAudio) return;
+                setHasUnlockedAudio(true);
+                void unlockAndFadeIn();
+              }}
+              aria-label="Tune place resonance"
+              style={{
+                width: 132,
+                height: 132,
+                marginTop: 18,
+                borderRadius: 999,
+                border: "1px solid rgba(160, 208, 255, 0.74)",
+                background:
+                  "radial-gradient(circle at 50% 50%, rgba(194, 229, 255, 0.82), rgba(84, 146, 255, 0.36) 56%, rgba(57, 101, 190, 0.2) 100%)",
+                color: "rgba(245, 251, 255, 0.97)",
+                boxShadow: "0 0 0 1px rgba(196, 224, 255, 0.5), 0 0 36px rgba(118, 176, 255, 0.42)",
+                cursor: "pointer",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                fontSize: 12,
+              }}
+            >
+              Resonance
+            </button>
             <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-              Use the mixer icon to open dedicated sound-channel pages.
+              Drag after tuning to modulate filter motion while the drone stays continuous.
             </div>
           </div>
         </div>
