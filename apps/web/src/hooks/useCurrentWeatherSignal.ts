@@ -13,6 +13,7 @@ export type WeatherSignal = {
   rainMm: number;
   precipitationMm: number;
   dailyRainMm: number;
+  showersMm: number;
   status: "idle" | "loading" | "live" | "fallback" | "error";
 };
 
@@ -33,6 +34,7 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   rainMm: 0,
   precipitationMm: 0,
   dailyRainMm: 0,
+  showersMm: number;
   status: "idle",
 };
 
@@ -130,6 +132,7 @@ export function useCurrentWeatherSignal() {
           rainMm: Number(current.rain) || 0,
           precipitationMm: Number(current.precipitation) || 0,
           dailyRainMm: Number(daily.rain_sum?.[0]) || 0,
+          showersMm: Number(current.showers) || 0,
           status: "live",
         });
       } catch (error) {
