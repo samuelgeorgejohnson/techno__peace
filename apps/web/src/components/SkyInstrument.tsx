@@ -86,13 +86,28 @@ export default function SkyInstrument() {
       sunAltitudeDeg: weather.sunAltitudeDeg,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
+      rainMm: weather.rainMm,
+      precipitationMm: weather.precipitationMm,
+      dailyRainMm: weather.dailyRainMm,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [
+    isRunning,
+    pt,
+    update,
+    weather.cloudCover,
+    weather.dailyRainMm,
+    weather.moonPhase,
+    weather.precipitationMm,
+    weather.rainMm,
+    weather.sunAltitudeDeg,
+    weather.temperatureC,
+    weather.windMps,
+  ]);
 
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
@@ -326,6 +341,9 @@ export default function SkyInstrument() {
         <div>
           cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
         </div>
+        <div>rain: {weather.rainMm?.toFixed(2) ?? "0.00"} mm now</div>
+        <div>precip: {weather.precipitationMm?.toFixed(2) ?? "0.00"} mm now</div>
+        <div>daily rain: {weather.dailyRainMm?.toFixed(2) ?? "0.00"} mm</div>
         <div>
           temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
         </div>
@@ -338,8 +356,8 @@ export default function SkyInstrument() {
             position: "absolute",
             inset: 0,
             zIndex: 2,
-            display: "grid",
-            placeItems: "center",
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
             padding: 24,
             background: "rgba(4, 6, 14, 0.48)",
             backdropFilter: "blur(14px)",
@@ -348,7 +366,9 @@ export default function SkyInstrument() {
           <div
             style={{
               width: "min(960px, 100%)",
-              minHeight: "min(620px, 100%)",
+              maxHeight: "calc(100vh - 48px)",
+              overflowY: "auto",
+              margin: "0 auto",
               borderRadius: 28,
               border: "1px solid rgba(255,255,255,0.12)",
               background:

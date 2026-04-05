@@ -9,6 +9,9 @@ export type AudioParams = {
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
+  rainMm: number;
+  precipitationMm: number;
+  dailyRainMm: number;
 };
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -28,6 +31,8 @@ export function useAudioEngine() {
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
+  const rainNormRef = useRef(0);
+  const dropletTimerRef = useRef<number | null>(null);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -42,7 +47,45 @@ export function useAudioEngine() {
     noiseGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
+    rainNormRef.current = 0;
     startedRef.current = false;
+    if (dropletTimerRef.current !== null) {
+      window.clearInterval(dropletTimerRef.current);
+      dropletTimerRef.current = null;
+    }
+  }
+
+  function triggerDroplet(ctx: AudioContext, rainNorm: number) {
+    const body = filterRef.current;
+    if (!body || rainNorm <= 0) return;
+
+    const now = ctx.currentTime;
+    const tick = ctx.createOscillator();
+    tick.type = "triangle";
+    tick.frequency.setValueAtTime(1300 + Math.random() * 2600, now);
+
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = "highpass";
+    highpass.frequency.value = 900 + Math.random() * 1100;
+    highpass.Q.value = 0.5;
+
+    const tickGain = ctx.createGain();
+    tickGain.gain.value = 0;
+
+    const amp = 0.005 + 0.03 * rainNorm * Math.random();
+    const attack = 0.002;
+    const decay = 0.025 + Math.random() * 0.055;
+
+    tickGain.gain.setValueAtTime(0.0001, now);
+    tickGain.gain.linearRampToValueAtTime(amp, now + attack);
+    tickGain.gain.exponentialRampToValueAtTime(0.0001, now + attack + decay);
+
+    tick.connect(highpass);
+    highpass.connect(tickGain);
+    tickGain.connect(body);
+
+    tick.start(now);
+    tick.stop(now + attack + decay + 0.03);
   }
 
   function ensureContext(): AudioContext {
@@ -128,6 +171,21 @@ export function useAudioEngine() {
     noiseSrc.start();
     lfo.start();
 
+    if (dropletTimerRef.current !== null) {
+      window.clearInterval(dropletTimerRef.current);
+    }
+    dropletTimerRef.current = window.setInterval(() => {
+      const rainNorm = rainNormRef.current;
+      if (rainNorm <= 0.02) return;
+
+      const events = rainNorm > 0.7 ? 2 : 1;
+      for (let i = 0; i < events; i++) {
+        if (Math.random() < 0.25 + 0.7 * rainNorm) {
+          triggerDroplet(ctx, rainNorm);
+        }
+      }
+    }, 120);
+
     startedRef.current = true;
     setIsRunning(ctx.state === "running");
   }
@@ -144,16 +202,23 @@ export function useAudioEngine() {
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
+    const rainNowMm = Math.max(p.rainMm ?? 0, p.precipitationMm ?? 0);
+    const rainNorm = clamp(rainNowMm / 4);
+    rainNormRef.current = rainNorm;
 
     const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
     const subHz = baseHz / 2;
 
-    const cutoff = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
-    const noiseAmt = 0.015 + 0.22 * windNorm + 0.1 * cloudCover + 0.08 * pressure;
+    const cutoff = Math.max(
+      140,
+      220 + 1800 * windNorm + 2200 * Math.pow(1 - y, 1.8) - 800 * rainNorm,
+    );
+    const noiseAmt =
+      0.01 + 0.12 * windNorm + 0.06 * cloudCover + 0.28 * rainNorm + 0.04 * pressure;
     const master = 0.035 + 0.08 * (1 - cloudCover) + 0.07 * pressure;
 
     const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
-    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure;
+    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure + 0.04 * rainNorm;
 
     const now = ctx.currentTime;
 

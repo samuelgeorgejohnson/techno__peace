@@ -7,6 +7,9 @@ export type WeatherSignal = {
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
+  rainMm: number;
+  precipitationMm: number;
+  dailyRainMm: number;
   isDay: boolean;
   latitude: number;
   longitude: number;
@@ -24,6 +27,9 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   sunAltitudeDeg: 12,
   moonPhase: 0.5,
   temperatureC: 18,
+  rainMm: 0,
+  precipitationMm: 0,
+  dailyRainMm: 0,
   isDay: true,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
@@ -91,8 +97,8 @@ export function useCurrentWeatherSignal() {
         longitude: coords.lon.toString(),
         timezone: "auto",
         forecast_days: "1",
-        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day",
-        daily: "sunrise,sunset",
+        current: "temperature_2m,cloud_cover,wind_speed_10m,is_day,rain,precipitation",
+        daily: "sunrise,sunset,precipitation_sum,rain_sum",
       });
 
       try {
@@ -118,6 +124,12 @@ export function useCurrentWeatherSignal() {
           sunAltitudeDeg: estimateSunAltitude(currentTime, sunrise, sunset),
           moonPhase: estimateMoonPhase(new Date(currentTime)),
           temperatureC: Number(current.temperature_2m) || 0,
+          rainMm: Math.max(Number(current.rain) || 0, 0),
+          precipitationMm: Math.max(Number(current.precipitation) || 0, 0),
+          dailyRainMm: Math.max(
+            Number(daily.rain_sum?.[0] ?? daily.precipitation_sum?.[0]) || 0,
+            0,
+          ),
           isDay: Boolean(current.is_day),
           latitude: coords.lat,
           longitude: coords.lon,
