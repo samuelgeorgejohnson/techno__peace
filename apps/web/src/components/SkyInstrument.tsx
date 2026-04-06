@@ -75,10 +75,11 @@ export default function SkyInstrument() {
     () =>
       getSkyState({
         sunAltitudeDeg: weather.sunAltitudeDeg,
-        cloudCover: weather.cloudCover,
-        windMps: weather.windMps,
-      }),
-    [weather.cloudCover, weather.sunAltitudeDeg, weather.windMps],
+      cloudCover: weather.cloudCover,
+      windMps: weather.windMps,
+      isDay: weather.isDay,
+    }),
+    [weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
   );
 
   function audioParams(nextPt: Pt) {
@@ -88,6 +89,7 @@ export default function SkyInstrument() {
       windMps: weather.windMps,
       humidityPct: weather.humidityPct,
       sunAltitudeDeg: weather.sunAltitudeDeg,
+      isDay: weather.isDay,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
       rainMm: weather.rainMm,
@@ -100,7 +102,7 @@ export default function SkyInstrument() {
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
   useEffect(
     () => () => {
@@ -226,7 +228,7 @@ export default function SkyInstrument() {
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
-        filter: `brightness(${0.72 + sky.brightness * 0.52})`,
+        filter: `brightness(${0.52 + sky.brightness * 0.68}) saturate(${0.82 + sky.dayness * 0.3})`,
         transition: "background 900ms ease, filter 900ms ease",
       }}
     >
@@ -240,8 +242,8 @@ export default function SkyInstrument() {
           position: "absolute",
           inset: "-6% -8% 24%",
           pointerEvents: "none",
-          background: `radial-gradient(1200px 420px at 50% 98%, rgba(255, 156, 108, ${0.08 + sky.horizonWarmth * 0.33}), rgba(255, 176, 120, 0) 72%)`,
-          opacity: 0.85,
+          background: `radial-gradient(1200px 420px at 50% 98%, rgba(255, 156, 108, ${0.02 + sky.horizonWarmth * 0.36}), rgba(255, 176, 120, 0) 72%)`,
+          opacity: 0.3 + sky.dayness * 0.68,
           zIndex: 0,
           mixBlendMode: "screen",
         }}
@@ -252,8 +254,8 @@ export default function SkyInstrument() {
           position: "absolute",
           inset: "-8% -8% -4%",
           pointerEvents: "none",
-          background: `radial-gradient(1000px 520px at 50% 88%, rgba(255, 184, 128, ${0.06 + sky.goldenWarmth * 0.3}), rgba(255, 184, 128, 0) 72%)`,
-          opacity: 0.9,
+          background: `radial-gradient(1000px 520px at 50% 88%, rgba(255, 184, 128, ${0.01 + sky.goldenWarmth * 0.34}), rgba(255, 184, 128, 0) 72%)`,
+          opacity: 0.2 + sky.dayness * 0.82,
           zIndex: 0,
           mixBlendMode: "screen",
         }}
