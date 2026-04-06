@@ -352,13 +352,14 @@ export default function SkyInstrument() {
       <div
         style={{
           position: "absolute",
+          top: 100,
           right: 16,
-          bottom: 16,
+          bottom: "auto",
           padding: "10px 12px",
           borderRadius: 14,
-          background: "rgba(0,0,0,0.35)",
+          background: "rgba(10, 14, 24, 0.72)",
           border: "1px solid rgba(255,255,255,0.08)",
-          color: "rgba(255,255,255,0.86)",
+          color: "rgba(255,255,255,0.96)",
           fontSize: 12,
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
           backdropFilter: "blur(10px)",
