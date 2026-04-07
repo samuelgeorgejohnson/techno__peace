@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export type AudioParams = {
+  // signals
   x: number;
   y: number;
   pressure: number;
@@ -18,6 +19,15 @@ export type AudioParams = {
   precipitationMm: number;
   dailyRainMm: number;
   showersMm: number;
+
+  // celestial mapping
+  sunLevel: number;
+  moonLevel: number;
+  sunAzimuthDeg: number;
+  sunDayProgress: number;
+  moonAltitudeDeg: number;
+  moonAzimuthDeg: number;
+  moonVisible: boolean;
 };
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -50,13 +60,21 @@ function derivePlaceBaseFrequency(latitude: number, longitude: number) {
 export function useAudioEngine() {
   const ctxRef = useRef<AudioContext | null>(null);
 
-  const oscRef = useRef<OscillatorNode | null>(null);
-  const subRef = useRef<OscillatorNode | null>(null);
+  // audio
+  const placeOscRef = useRef<OscillatorNode | null>(null);
+  const placeSubRef = useRef<OscillatorNode | null>(null);
+  const sunOscRef = useRef<OscillatorNode | null>(null);
+  const moonOscRef = useRef<OscillatorNode | null>(null);
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
 
   const filterRef = useRef<BiquadFilterNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const placeGainRef = useRef<GainNode | null>(null);
+  const sunGainRef = useRef<GainNode | null>(null);
+  const moonGainRef = useRef<GainNode | null>(null);
   const noiseGainRef = useRef<GainNode | null>(null);
+  const sunPanRef = useRef<StereoPannerNode | null>(null);
+  const moonPanRef = useRef<StereoPannerNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
@@ -66,12 +84,19 @@ export function useAudioEngine() {
   const [isRunning, setIsRunning] = useState(false);
 
   function resetGraph() {
-    oscRef.current = null;
-    subRef.current = null;
+    placeOscRef.current = null;
+    placeSubRef.current = null;
+    sunOscRef.current = null;
+    moonOscRef.current = null;
     noiseSrcRef.current = null;
     filterRef.current = null;
     gainRef.current = null;
+    placeGainRef.current = null;
+    sunGainRef.current = null;
+    moonGainRef.current = null;
     noiseGainRef.current = null;
+    sunPanRef.current = null;
+    moonPanRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
     startedRef.current = false;
@@ -111,15 +136,25 @@ export function useAudioEngine() {
     filter.Q.value = 0.6;
     filterRef.current = filter;
 
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = 110;
-    oscRef.current = osc;
+    const placeOsc = ctx.createOscillator();
+    placeOsc.type = "sine";
+    placeOsc.frequency.value = 110;
+    placeOscRef.current = placeOsc;
 
-    const sub = ctx.createOscillator();
-    sub.type = "sine";
-    sub.frequency.value = 55;
-    subRef.current = sub;
+    const placeSub = ctx.createOscillator();
+    placeSub.type = "sine";
+    placeSub.frequency.value = 55;
+    placeSubRef.current = placeSub;
+
+    const sunOsc = ctx.createOscillator();
+    sunOsc.type = "triangle";
+    sunOsc.frequency.value = 220;
+    sunOscRef.current = sunOsc;
+
+    const moonOsc = ctx.createOscillator();
+    moonOsc.type = "sine";
+    moonOsc.frequency.value = 165;
+    moonOscRef.current = moonOsc;
 
     const buffer = ctx.createBuffer(1, ctx.sampleRate * 1.0, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -134,6 +169,26 @@ export function useAudioEngine() {
     noiseGain.gain.value = 0.0;
     noiseGainRef.current = noiseGain;
 
+    const placeGain = ctx.createGain();
+    placeGain.gain.value = 0.7;
+    placeGainRef.current = placeGain;
+
+    const sunGain = ctx.createGain();
+    sunGain.gain.value = 0.0;
+    sunGainRef.current = sunGain;
+
+    const moonGain = ctx.createGain();
+    moonGain.gain.value = 0.0;
+    moonGainRef.current = moonGain;
+
+    const sunPan = ctx.createStereoPanner();
+    sunPan.pan.value = 0;
+    sunPanRef.current = sunPan;
+
+    const moonPan = ctx.createStereoPanner();
+    moonPan.pan.value = 0;
+    moonPanRef.current = moonPan;
+
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
     lfo.frequency.value = 0.15;
@@ -143,8 +198,17 @@ export function useAudioEngine() {
     lfoGain.gain.value = 0.0;
     lfoGainRef.current = lfoGain;
 
-    osc.connect(filter);
-    sub.connect(filter);
+    placeOsc.connect(placeGain);
+    placeSub.connect(placeGain);
+    placeGain.connect(filter);
+
+    sunOsc.connect(sunPan);
+    sunPan.connect(sunGain);
+    sunGain.connect(filter);
+
+    moonOsc.connect(moonPan);
+    moonPan.connect(moonGain);
+    moonGain.connect(filter);
 
     noiseSrc.connect(noiseGain);
     noiseGain.connect(filter);
@@ -155,8 +219,10 @@ export function useAudioEngine() {
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
 
-    osc.start();
-    sub.start();
+    placeOsc.start();
+    placeSub.start();
+    sunOsc.start();
+    moonOsc.start();
     noiseSrc.start();
     lfo.start();
 
@@ -185,6 +251,17 @@ export function useAudioEngine() {
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
+    const sunIntervals = [0, 7, 2, 4, 7, 0];
+    const moonIntervals = [0, 5, 10, 3, 8, 0];
+    const dayProgress = clamp(p.sunDayProgress);
+    const sunStep = Math.min(
+      sunIntervals.length - 1,
+      Math.floor(dayProgress * sunIntervals.length),
+    );
+    const moonStep = Math.min(
+      moonIntervals.length - 1,
+      Math.floor((1 - clamp(p.moonPhase)) * moonIntervals.length),
+    );
     const centerTuneSemitones = (x - 0.5) * 12;
     const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
     const weatherPitchMod =
@@ -195,6 +272,8 @@ export function useAudioEngine() {
       0.06 * (cloudCover - 0.5);
     const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
+    const sunHz = baseHz * Math.pow(2, sunIntervals[sunStep] / 12);
+    const moonHz = (baseHz / 2) * Math.pow(2, moonIntervals[moonStep] / 12);
 
     const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
     const cutoff =
@@ -221,6 +300,20 @@ export function useAudioEngine() {
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
     const gainSmoothing = 0.03 + 0.045 * wetness;
+    const sunAltitudeNorm = clamp((p.sunAltitudeDeg + 90) / 180);
+    const moonAltitudeNorm = clamp((p.moonAltitudeDeg + 90) / 180);
+    const sunGain =
+      (0.01 + 0.12 * sunAltitudeNorm + 0.08 * dayness) *
+      clamp(p.sunLevel) *
+      (0.8 + 0.3 * dayProgress);
+    const moonGain =
+      (0.004 + 0.11 * moonAltitudeNorm) *
+      clamp(p.moonLevel) *
+      (p.moonVisible ? 1 : 0.25) *
+      (0.4 + 0.6 * p.moonPhase);
+    const sunPan = clamp((p.sunAzimuthDeg % 360) / 180 - 1, -1, 1);
+    const moonPan = clamp((p.moonAzimuthDeg % 360) / 180 - 1, -1, 1);
+    const moonSoftness = 0.015 + (1 - p.moonPhase) * 0.05;
 
     const now = ctx.currentTime;
 
@@ -246,10 +339,17 @@ if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
   click.stop(t + 0.1);
 }
 
-    oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
-    subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
+    placeOscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
+    placeSubRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
+    sunOscRef.current?.frequency.setTargetAtTime(sunHz, now, pitchSmoothing);
+    moonOscRef.current?.frequency.setTargetAtTime(moonHz, now, pitchSmoothing + moonSoftness);
     filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
     filterRef.current?.Q.setTargetAtTime(filterQ, now, toneSmoothing);
+    placeGainRef.current?.gain.setTargetAtTime(0.6 + 0.2 * dayness, now, gainSmoothing);
+    sunGainRef.current?.gain.setTargetAtTime(sunGain, now, gainSmoothing);
+    moonGainRef.current?.gain.setTargetAtTime(moonGain, now, gainSmoothing + moonSoftness);
+    sunPanRef.current?.pan.setTargetAtTime(sunPan, now, 0.06);
+    moonPanRef.current?.pan.setTargetAtTime(moonPan, now, 0.06);
 
     noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
     gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
