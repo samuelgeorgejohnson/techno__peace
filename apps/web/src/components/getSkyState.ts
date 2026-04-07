@@ -18,6 +18,7 @@ export type SkyState = {
   horizonWarmth: number;
   goldenWarmth: number;
   dayBlue: number;
+  dayness: number;
   cloudDensity: "low" | "medium" | "high";
 };
 
@@ -46,10 +47,12 @@ export function getSkyState({
   sunAltitudeDeg,
   cloudCover,
   windMps,
+  isDay,
 }: {
   sunAltitudeDeg: number;
   cloudCover: number;
   windMps: number;
+  isDay: boolean;
 }): SkyState {
   const sun = Math.max(-90, Math.min(90, sunAltitudeDeg));
   const cloud = clamp01(cloudCover);
@@ -65,31 +68,32 @@ export function getSkyState({
 
   const dayLift = smoothstep(-10, 20, sun);
   const noonLift = smoothstep(10, 55, sun);
+  const dayness = clamp01((isDay ? 0.72 : 0) + (0.28 * dayLift + 0.22 * noonLift));
   const duskDrop = smoothstep(4, -12, sun);
-  const brightness = clamp01(0.08 + 0.55 * dayLift + 0.42 * noonLift - 0.15 * duskDrop);
+  const brightness = clamp01(0.05 + 0.5 * dayness + 0.33 * noonLift - 0.18 * duskDrop);
 
-  const horizonWarmth = Math.max(smoothstep(-8, 4, sun), smoothstep(4, -8, sun));
+  const horizonWarmth = 1 - smoothstep(2, 18, Math.abs(sun));
   const goldenWarmth = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
   const dayBlue = smoothstep(8, 45, sun);
 
-  const nightTop: [number, number, number] = [8, 12, 24];
+  const nightTop: [number, number, number] = [2, 5, 14];
   const dawnTop: [number, number, number] = [34, 53, 92];
   const dayTop: [number, number, number] = [74, 139, 226];
 
-  const nightMid: [number, number, number] = [16, 22, 38];
+  const nightMid: [number, number, number] = [6, 10, 24];
   const dawnMid: [number, number, number] = [77, 105, 162];
   const dayMid: [number, number, number] = [126, 182, 244];
 
-  const nightHorizon: [number, number, number] = [30, 28, 44];
+  const nightHorizon: [number, number, number] = [10, 14, 28];
   const dawnHorizon: [number, number, number] = [222, 144, 112];
   const dayHorizon: [number, number, number] = [186, 214, 252];
 
-  const topBase = blendRgb(blendRgb(nightTop, dawnTop, dayLift), dayTop, dayBlue);
-  const midBase = blendRgb(blendRgb(nightMid, dawnMid, dayLift), dayMid, dayBlue);
-  const horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, horizonWarmth), dayHorizon, dayBlue);
+  const topBase = blendRgb(blendRgb(nightTop, dawnTop, dayness), dayTop, dayBlue);
+  const midBase = blendRgb(blendRgb(nightMid, dawnMid, dayness), dayMid, dayBlue);
+  const horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.6, dayness * 0.72)), dayHorizon, dayBlue);
 
-  const overcastTint: [number, number, number] = [132, 145, 166];
-  const cloudMute = smoothstep(0.35, 1, cloud) * 0.58;
+  const overcastTint = blendRgb([44, 52, 76], [132, 145, 166], dayness);
+  const cloudMute = smoothstep(0.35, 1, cloud) * (0.4 + 0.24 * dayness);
 
   const topColor = toRgbString(blendRgb(topBase, overcastTint, cloudMute));
   const midColor = toRgbString(blendRgb(midBase, overcastTint, cloudMute * 0.85));
@@ -97,7 +101,8 @@ export function getSkyState({
 
   const cloudDensity = cloud < 0.34 ? "low" : cloud < 0.68 ? "medium" : "high";
   const cloudOpacity =
-    cloudDensity === "low" ? 0.14 + cloud * 0.2 : cloudDensity === "medium" ? 0.26 + cloud * 0.33 : 0.48 + cloud * 0.35;
+    (cloudDensity === "low" ? 0.12 + cloud * 0.18 : cloudDensity === "medium" ? 0.24 + cloud * 0.3 : 0.46 + cloud * 0.32) *
+    (0.82 + 0.24 * dayness);
 
   const cloudSpeed = 8 + wind * 4.8;
 
@@ -112,6 +117,7 @@ export function getSkyState({
     horizonWarmth,
     goldenWarmth,
     dayBlue,
+    dayness,
     cloudDensity,
   };
 }
