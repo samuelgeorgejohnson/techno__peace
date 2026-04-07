@@ -10,6 +10,7 @@ export type AudioParams = {
   windMps: number;
   humidityPct: number;
   sunAltitudeDeg: number;
+  isDay: boolean;
   moonPhase: number;
   temperatureC: number;
 
@@ -174,6 +175,9 @@ export function useAudioEngine() {
     const windNorm = clamp(p.windMps / 20);
     const humidityNorm = clamp(p.humidityPct / 100);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
+    const dayGate = p.isDay ? 1 : 0;
+    const dayLight = clamp(0.15 + 0.85 * sunNorm * 1.06);
+    const dayness = clamp(0.68 * dayGate + 0.32 * dayLight);
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
@@ -192,8 +196,9 @@ export function useAudioEngine() {
     const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
 
-    const cutoffBase = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
-    const cutoff = cutoffBase * (1 - 0.22 * humidityNorm);
+    const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
+    const cutoff =
+      cutoffBase * (1 - 0.22 * humidityNorm) * (0.52 + 0.76 * dayness);
     const filterQ = 0.78 - 0.35 * humidityNorm;
     const noiseAmt =
       (0.01 +
@@ -201,12 +206,18 @@ export function useAudioEngine() {
         0.08 * cloudCover +
         0.05 * pressure +
         0.6 * rainNorm) *
-      (1 - 0.22 * humidityNorm);
+      (1 - 0.22 * humidityNorm) *
+      (0.74 + 0.36 * dayness);
     const master =
-      0.032 + 0.075 * (1 - cloudCover) + 0.07 * pressure + 0.018 * wetness;
+      (0.022 + 0.06 * (1 - cloudCover) + 0.068 * pressure + 0.016 * wetness) *
+      (0.82 + 0.32 * dayness);
 
-    const lfoRate = 0.04 + 0.6 * sunNorm + 0.55 * Math.pow(1 - y, 1.2);
-    const lfoDepth = 0.02 + 0.16 * moonPhase + 0.05 * pressure + 0.03 * diffusion;
+    const lfoRate =
+      (0.03 + 0.48 * sunNorm + 0.45 * Math.pow(1 - y, 1.2)) *
+      (0.64 + 0.64 * dayness);
+    const lfoDepth =
+      (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion) *
+      (0.66 + 0.72 * dayness);
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
     const gainSmoothing = 0.03 + 0.045 * wetness;
