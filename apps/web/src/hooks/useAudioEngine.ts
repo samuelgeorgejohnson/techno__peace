@@ -10,6 +10,9 @@ export type AudioParams = {
   windMps: number;
   humidityPct: number;
   sunAltitudeDeg: number;
+  sunAzimuthDeg: number;
+  sunriseMs: number;
+  sunsetMs: number;
   isDay: boolean;
   moonPhase: number;
   temperatureC: number;
@@ -20,8 +23,28 @@ export type AudioParams = {
   showersMm: number;
 };
 
-function clamp(x: number, lo = 0, hi = 1) {
-  return Math.max(lo, Math.min(hi, x));
+function clamp(v: number, min = 0, max = 1) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function getDayProgress(nowMs: number, sunriseMs: number, sunsetMs: number) {
+  if (!sunriseMs || !sunsetMs || sunsetMs <= sunriseMs) return 0;
+  return clamp((nowMs - sunriseMs) / (sunsetMs - sunriseMs), 0, 1);
+}
+
+function sunIntervalFromDayProgress(dayProgress: number) {
+  const sunIntervals = [0, 7, 2, 4, 7, 0];
+  const idx = Math.min(sunIntervals.length - 1, Math.floor(dayProgress * sunIntervals.length));
+  return sunIntervals[idx];
+}
+
+function semitoneRatio(semitones: number) {
+  return Math.pow(2, semitones / 12);
+}
+
+function getSunFreq(placeFreq: number, dayProgress: number) {
+  const semitones = sunIntervalFromDayProgress(dayProgress);
+  return placeFreq * semitoneRatio(semitones);
 }
 
 function fractional(x: number) {
@@ -52,10 +75,13 @@ export function useAudioEngine() {
 
   const oscRef = useRef<OscillatorNode | null>(null);
   const subRef = useRef<OscillatorNode | null>(null);
+  const sunRef = useRef<OscillatorNode | null>(null);
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
 
   const filterRef = useRef<BiquadFilterNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
+  const sunGainRef = useRef<GainNode | null>(null);
+  const sunPanRef = useRef<StereoPannerNode | null>(null);
   const noiseGainRef = useRef<GainNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
@@ -68,9 +94,12 @@ export function useAudioEngine() {
   function resetGraph() {
     oscRef.current = null;
     subRef.current = null;
+    sunRef.current = null;
     noiseSrcRef.current = null;
     filterRef.current = null;
     gainRef.current = null;
+    sunGainRef.current = null;
+    sunPanRef.current = null;
     noiseGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
@@ -121,6 +150,19 @@ export function useAudioEngine() {
     sub.frequency.value = 55;
     subRef.current = sub;
 
+    const sun = ctx.createOscillator();
+    sun.type = "triangle";
+    sun.frequency.value = 110;
+    sunRef.current = sun;
+
+    const sunGain = ctx.createGain();
+    sunGain.gain.value = 0.0001;
+    sunGainRef.current = sunGain;
+
+    const sunPan = ctx.createStereoPanner();
+    sunPan.pan.value = 0;
+    sunPanRef.current = sunPan;
+
     const buffer = ctx.createBuffer(1, ctx.sampleRate * 1.0, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
@@ -145,6 +187,9 @@ export function useAudioEngine() {
 
     osc.connect(filter);
     sub.connect(filter);
+    sun.connect(sunGain);
+    sunGain.connect(sunPan);
+    sunPan.connect(filter);
 
     noiseSrc.connect(noiseGain);
     noiseGain.connect(filter);
@@ -157,6 +202,7 @@ export function useAudioEngine() {
 
     osc.start();
     sub.start();
+    sun.start();
     noiseSrc.start();
     lfo.start();
 
@@ -184,17 +230,23 @@ export function useAudioEngine() {
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
+    // place = home/root/body tone anchored to location
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
     const centerTuneSemitones = (x - 0.5) * 12;
-    const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
+    const centerTuneRatio = semitoneRatio(centerTuneSemitones);
     const weatherPitchMod =
       1 +
-      0.22 * (sunNorm - 0.5) +
-      0.18 * (tempNorm - 0.5) +
-      0.08 * (pressure - 0.5) +
-      0.06 * (cloudCover - 0.5);
-    const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
-    const subHz = baseHz / 2;
+      0.05 * (tempNorm - 0.5) +
+      0.02 * (pressure - 0.5);
+    const placeFreq = placeBaseHz * centerTuneRatio * weatherPitchMod;
+    const subHz = placeFreq / 2;
+    const dayProgress = getDayProgress(Date.now(), p.sunriseMs, p.sunsetMs);
+    // sun = moving harmonic companion derived from place
+    const sunFreq = getSunFreq(placeFreq, dayProgress);
+    const sunAltitudeNorm = clamp((p.sunAltitudeDeg + 5) / 75, 0, 1);
+    const sunGain =
+      (0.004 + 0.05 * sunAltitudeNorm) * (1 - 0.35 * cloudCover) * (0.75 + 0.25 * dayGate);
+    const sunPan = clamp(p.sunAzimuthDeg / 120, -1, 1);
 
     const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
     const cutoff =
@@ -212,8 +264,9 @@ export function useAudioEngine() {
       (0.022 + 0.06 * (1 - cloudCover) + 0.068 * pressure + 0.016 * wetness) *
       (0.82 + 0.32 * dayness);
 
+    // weather = modulation of the place/sun relationship
     const lfoRate =
-      (0.03 + 0.48 * sunNorm + 0.45 * Math.pow(1 - y, 1.2)) *
+      (0.03 + 0.3 * windNorm + 0.12 * sunNorm + 0.22 * Math.pow(1 - y, 1.2)) *
       (0.64 + 0.64 * dayness);
     const lfoDepth =
       (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion) *
@@ -246,8 +299,11 @@ if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
   click.stop(t + 0.1);
 }
 
-    oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
+    oscRef.current?.frequency.setTargetAtTime(placeFreq, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
+    sunRef.current?.frequency.setTargetAtTime(sunFreq, now, pitchSmoothing);
+    sunGainRef.current?.gain.setTargetAtTime(sunGain, now, gainSmoothing);
+    sunPanRef.current?.pan.setTargetAtTime(sunPan, now, toneSmoothing);
     filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
     filterRef.current?.Q.setTargetAtTime(filterQ, now, toneSmoothing);
 

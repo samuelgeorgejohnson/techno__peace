@@ -110,6 +110,9 @@ export default function SkyInstrument({
       windMps: weather.windMps,
       humidityPct: weather.humidityPct,
       sunAltitudeDeg: weather.sunAltitudeDeg,
+      sunAzimuthDeg: weather.sunAzimuthDeg,
+      sunriseMs: weather.sunriseMs,
+      sunsetMs: weather.sunsetMs,
       isDay: weather.isDay,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
@@ -123,7 +126,7 @@ export default function SkyInstrument({
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.sunAzimuthDeg, weather.sunriseMs, weather.sunsetMs, weather.temperatureC, weather.windMps]);
 
   useEffect(
     () => () => {
