@@ -75,12 +75,13 @@ export default function SkyInstrument() {
     () =>
       getSkyState({
         sunAltitudeDeg: weather.sunAltitudeDeg,
-      cloudCover: weather.cloudCover,
-      windMps: weather.windMps,
-      isDay: weather.isDay,
-    }),
+        cloudCover: weather.cloudCover,
+        windMps: weather.windMps,
+        isDay: weather.isDay,
+      }),
     [weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
   );
+  const nightness = 1 - sky.dayness;
 
   function audioParams(nextPt: Pt) {
     return {
@@ -243,7 +244,7 @@ export default function SkyInstrument() {
           inset: "-6% -8% 24%",
           pointerEvents: "none",
           background: `radial-gradient(1200px 420px at 50% 98%, rgba(255, 156, 108, ${0.02 + sky.horizonWarmth * 0.36}), rgba(255, 176, 120, 0) 72%)`,
-          opacity: 0.3 + sky.dayness * 0.68,
+          opacity: 0.08 + sky.dayness * 0.82,
           zIndex: 0,
           mixBlendMode: "screen",
         }}
@@ -255,9 +256,21 @@ export default function SkyInstrument() {
           inset: "-8% -8% -4%",
           pointerEvents: "none",
           background: `radial-gradient(1000px 520px at 50% 88%, rgba(255, 184, 128, ${0.01 + sky.goldenWarmth * 0.34}), rgba(255, 184, 128, 0) 72%)`,
-          opacity: 0.2 + sky.dayness * 0.82,
+          opacity: 0.04 + sky.dayness * 0.9,
           zIndex: 0,
           mixBlendMode: "screen",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "-10% -10% -6%",
+          pointerEvents: "none",
+          background: `radial-gradient(940px 620px at 50% 64%, rgba(255, 255, 255, ${0.02 + weather.moonPhase * 0.24}), rgba(255, 255, 255, 0) 74%)`,
+          opacity: nightness * (0.4 + weather.moonPhase * 0.9),
+          zIndex: 0,
+          mixBlendMode: "soft-light",
         }}
       />
       <div

@@ -72,7 +72,7 @@ export function getSkyState({
   const duskDrop = smoothstep(4, -12, sun);
   const brightness = clamp01(0.05 + 0.5 * dayness + 0.33 * noonLift - 0.18 * duskDrop);
 
-  const horizonWarmth = Math.max(smoothstep(-8, 4, sun), smoothstep(4, -8, sun));
+  const horizonWarmth = 1 - smoothstep(2, 18, Math.abs(sun));
   const goldenWarmth = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
   const dayBlue = smoothstep(8, 45, sun);
 
