@@ -27,10 +27,10 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   cloudCover: 0.35,
   windMps: 3.2,
   humidityPct: 58,
-  sunAltitudeDeg: 12,
+  sunAltitudeDeg: -24,
   moonPhase: 0.5,
   temperatureC: 18,
-  isDay: true,
+  isDay: false,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
   rainMm: 0,
@@ -144,6 +144,8 @@ export function useCurrentWeatherSignal() {
 
         setSignal((current) => ({
           ...current,
+          sunAltitudeDeg: current.status === "live" ? current.sunAltitudeDeg : -24,
+          isDay: current.status === "live" ? current.isDay : false,
           latitude: coords.lat,
           longitude: coords.lon,
           status: locationError ? "fallback" : "error",
