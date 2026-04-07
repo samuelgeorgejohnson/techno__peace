@@ -176,7 +176,7 @@ export default function SkyInstrument() {
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio) return;
+    if (mixerOpen || !hasUnlockedAudio || !isDragging) return;
     const { x, y } = getXY(e);
     setIsDragging(false);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
@@ -294,6 +294,7 @@ export default function SkyInstrument() {
       <button
         type="button"
         onPointerDown={stopMixerEvent}
+        onPointerUp={stopMixerEvent}
         onClick={(e) => {
           e.stopPropagation();
           setMixerOpen((open) => !open);
@@ -388,6 +389,7 @@ export default function SkyInstrument() {
       {mixerOpen && activePage && (
         <div
           onPointerDown={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
           style={{
             position: "absolute",
             inset: 0,
@@ -462,6 +464,7 @@ export default function SkyInstrument() {
                       key={page.id}
                       type="button"
                       onPointerDown={stopMixerEvent}
+                      onPointerUp={stopMixerEvent}
                       onClick={(e) => {
                         e.stopPropagation();
                         setActivePageId(page.id);
@@ -542,6 +545,7 @@ export default function SkyInstrument() {
                     max={100}
                     value={channel.level}
                     onPointerDown={stopMixerEvent}
+                    onPointerUp={stopMixerEvent}
                     onChange={(e) =>
                       updateChannelLevel(activePage.id, channel.id, Number(e.currentTarget.value))
                     }
@@ -610,6 +614,7 @@ export default function SkyInstrument() {
             <button
               type="button"
               onPointerDown={stopMixerEvent}
+              onPointerUp={stopMixerEvent}
               onClick={() => {
                 if (hasUnlockedAudio) return;
                 setHasUnlockedAudio(true);
