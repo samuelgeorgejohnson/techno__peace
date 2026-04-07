@@ -21,6 +21,10 @@ function clamp(x: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, x));
 }
 
+function midiToHz(midi: number) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
 export function useAudioEngine() {
   const ctxRef = useRef<AudioContext | null>(null);
 
@@ -155,7 +159,13 @@ export function useAudioEngine() {
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
-    const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
+    const centerMidi = 60;
+    let dx = x - 0.5;
+    if (Math.abs(dx) < 0.04) dx = 0;
+    const semitoneOffset = Math.round(dx * 24);
+    const pitchLift = Math.round((sunNorm - 0.5) * 4 + (tempNorm - 0.5) * 3);
+    const baseMidi = centerMidi + pitchLift + semitoneOffset;
+    const baseHz = midiToHz(baseMidi);
     const subHz = baseHz / 2;
 
     const cutoffBase = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
