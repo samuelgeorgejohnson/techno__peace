@@ -9,7 +9,29 @@ function clamp01(x: number) {
 }
 
 type Pt = { x: number; y: number; pressure: number };
-type Channel = { id: string; name: string; detail: string; level: number };
+type CelestialSignal = {
+  sun: {
+    altitudeDeg: number;
+    azimuthDeg: number;
+    sunriseISO: string;
+    sunsetISO: string;
+    dayProgress: number;
+  };
+  moon: {
+    altitudeDeg: number;
+    azimuthDeg: number;
+    phase: number;
+    visible: boolean;
+  };
+};
+
+type Channel = {
+  id: string;
+  name: string;
+  detail: string;
+  level: number;
+  statusText?: (signal: CelestialSignal) => string;
+};
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
 
 const initialMixerPages: MixerPage[] = [
@@ -22,6 +44,29 @@ const initialMixerPages: MixerPage[] = [
       { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
       { id: "thunder", name: "Thunder", detail: "Low rolls and distant strikes", level: 36 },
       { id: "waves", name: "Waves", detail: "Slow surf and shoreline wash", level: 44 },
+    ],
+  },
+  {
+    id: "celestial",
+    title: "Celestial channels",
+    blurb: "Blend orbital motion as parallel harmonic movement.",
+    channels: [
+      {
+        id: "sun",
+        name: "Sun",
+        detail: "Moving daylight tone",
+        level: 62,
+        statusText: (signal) =>
+          `alt ${signal.sun.altitudeDeg.toFixed(1)}° · az ${signal.sun.azimuthDeg.toFixed(1)}° · gain ${Math.round(signal.sun.dayProgress * 100)}%`,
+      },
+      {
+        id: "moon",
+        name: "Moon",
+        detail: "Night body / reflective tone",
+        level: 48,
+        statusText: (signal) =>
+          `alt ${signal.moon.altitudeDeg.toFixed(1)}° · az ${signal.moon.azimuthDeg.toFixed(1)}° · phase ${signal.moon.phase.toFixed(2)} · gain ${signal.moon.visible ? "on" : "off"}`,
+      },
     ],
   },
   {
@@ -64,6 +109,7 @@ export default function SkyInstrument({
   isRequestingLocation,
   onRequestLocation,
 }: SkyInstrumentProps) {
+  // signals
   const elRef = useRef<HTMLDivElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
   const { start, update, isRunning } = useAudioEngine();
@@ -101,6 +147,50 @@ export default function SkyInstrument({
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
 
+  // celestial mapping
+  const celestialSignal = useMemo<CelestialSignal>(() => {
+    const now = new Date();
+    const sunrise = new Date(now);
+    sunrise.setHours(6, 0, 0, 0);
+    const sunset = new Date(now);
+    sunset.setHours(18, 0, 0, 0);
+    const dayProgress = clamp01((now.getTime() - sunrise.getTime()) / Math.max(sunset.getTime() - sunrise.getTime(), 1));
+    const azimuthFromDay = dayProgress * 360;
+    const moonAzimuth = (azimuthFromDay + 180) % 360;
+
+    return {
+      sun: {
+        altitudeDeg: weather.sunAltitudeDeg,
+        azimuthDeg: azimuthFromDay,
+        sunriseISO: sunrise.toISOString(),
+        sunsetISO: sunset.toISOString(),
+        dayProgress,
+      },
+      moon: {
+        altitudeDeg: -weather.sunAltitudeDeg * 0.72,
+        azimuthDeg: moonAzimuth,
+        phase: weather.moonPhase,
+        visible: !weather.isDay || weather.sunAltitudeDeg < -8,
+      },
+    };
+  }, [weather.isDay, weather.moonPhase, weather.sunAltitudeDeg]);
+
+  const sunChannelLevel = useMemo(
+    () =>
+      (mixerPages
+        .find((page) => page.id === "celestial")
+        ?.channels.find((channel) => channel.id === "sun")?.level ?? 0) / 100,
+    [mixerPages],
+  );
+  const moonChannelLevel = useMemo(
+    () =>
+      (mixerPages
+        .find((page) => page.id === "celestial")
+        ?.channels.find((channel) => channel.id === "moon")?.level ?? 0) / 100,
+    [mixerPages],
+  );
+
+  // audio
   function audioParams(nextPt: Pt) {
     return {
       ...nextPt,
@@ -117,6 +207,13 @@ export default function SkyInstrument({
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
       showersMm: weather.showersMm,
+      sunLevel: sunChannelLevel,
+      moonLevel: moonChannelLevel,
+      sunAzimuthDeg: celestialSignal.sun.azimuthDeg,
+      sunDayProgress: celestialSignal.sun.dayProgress,
+      moonAltitudeDeg: celestialSignal.moon.altitudeDeg,
+      moonAzimuthDeg: celestialSignal.moon.azimuthDeg,
+      moonVisible: celestialSignal.moon.visible,
     };
   }
 
@@ -510,6 +607,12 @@ export default function SkyInstrument({
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {mixerPages.map((page) => {
                   const isActive = page.id === activePage.id;
+                  const tabLabel =
+                    page.id === "weather"
+                      ? "Weather"
+                      : page.id === "celestial"
+                        ? "Celestial"
+                        : "Man-made";
                   return (
                     <button
                       key={page.id}
@@ -530,7 +633,7 @@ export default function SkyInstrument({
                         cursor: "pointer",
                       }}
                     >
-                      {page.title}
+                      {tabLabel}
                     </button>
                   );
                 })}
@@ -588,6 +691,18 @@ export default function SkyInstrument({
                     <span>Level</span>
                     <strong>{channel.level}%</strong>
                   </div>
+                  {channel.statusText && (
+                    <div
+                      style={{
+                        marginTop: -6,
+                        fontSize: 11,
+                        color: "rgba(189, 214, 255, 0.82)",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {channel.statusText(celestialSignal)}
+                    </div>
+                  )}
 
                   <input
                     type="range"
