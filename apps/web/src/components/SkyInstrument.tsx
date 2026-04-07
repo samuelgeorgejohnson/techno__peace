@@ -355,63 +355,69 @@ export default function SkyInstrument({
           backdropFilter: "blur(10px)",
           display: "grid",
           gap: 8,
-          minWidth: 220,
+          minWidth: 280,
         }}
       >
         <div style={{ letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION + MIXER</div>
-        <button
-          type="button"
-          onPointerDown={stopMixerEvent}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMixerOpen((open) => !open);
-          }}
-          aria-label={mixerOpen ? "Close mixer" : "Open mixer"}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: "1px solid rgba(255,255,255,0.14)",
-            background: mixerOpen ? "rgba(102, 156, 255, 0.24)" : "rgba(255,255,255,0.06)",
-            color: "rgba(255,255,255,0.94)",
-            cursor: "pointer",
-          }}
-        >
-          <FadersIcon />
-          <span
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <button
+            type="button"
+            onPointerDown={stopMixerEvent}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMixerOpen((open) => !open);
+            }}
+            aria-label={mixerOpen ? "Close mixer" : "Open mixer"}
             style={{
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: mixerOpen ? "rgba(102, 156, 255, 0.24)" : "rgba(255,255,255,0.06)",
+              color: "rgba(255,255,255,0.94)",
+              cursor: "pointer",
             }}
           >
-            Mixer
-          </span>
-        </button>
+            <FadersIcon />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+              }}
+            >
+              Mixer
+            </span>
+          </button>
+          <button
+            type="button"
+            onPointerDown={stopMixerEvent}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestLocation();
+            }}
+            disabled={isRequestingLocation}
+            style={{
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: isRequestingLocation ? "rgba(102, 156, 255, 0.24)" : "rgba(255,255,255,0.06)",
+              color: "rgba(255,255,255,0.94)",
+              padding: "10px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              cursor: isRequestingLocation ? "wait" : "pointer",
+            }}
+          >
+            {isRequestingLocation ? "Requesting..." : "Geolocate"}
+          </button>
+        </div>
         <div style={{ opacity: 0.9 }}>{locationText}</div>
-        <button
-          type="button"
-          onPointerDown={stopMixerEvent}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestLocation();
-          }}
-          disabled={isRequestingLocation}
-          style={{
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(255,255,255,0.08)",
-            color: "white",
-            padding: "8px 10px",
-            cursor: isRequestingLocation ? "wait" : "pointer",
-          }}
-        >
-          {isRequestingLocation ? "Requesting..." : "Request location"}
-        </button>
         <div>audio: {isRunning ? "on" : "off"}</div>
         <div>
           lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
