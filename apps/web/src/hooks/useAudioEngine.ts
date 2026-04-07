@@ -10,6 +10,13 @@ export type AudioParams = {
   sunAltitudeDeg: number;
   moonPhase: number;
   temperatureC: number;
+  latitude: number;
+  longitude: number;
+  elevationM: number;
+  placeToneHz: number;
+  windMix: number;
+  rainMix: number;
+  humidityMix: number;
 
   rainMm: number;
   precipitationMm: number;
@@ -146,16 +153,23 @@ export function useAudioEngine() {
     const y = clamp(p.y);
     const pressure = clamp(p.pressure);
     const cloudCover = clamp(p.cloudCover);
-    const windNorm = clamp(p.windMps / 20);
-    const humidityNorm = clamp(p.humidityPct / 100);
+    const windNorm = clamp((p.windMps / 20) * p.windMix, 0, 2);
+    const humidityNorm = clamp((p.humidityPct / 100) * p.humidityMix, 0, 2);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
-    const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
+    const elevationNorm = clamp((p.elevationM + 100) / 3100);
+    const rainNorm = clamp(((p.rainMm + p.showersMm) / 5) * p.rainMix, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
-    const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
+    const placeToneHz = Math.max(40, Math.min(420, p.placeToneHz));
+    const baseHz =
+      placeToneHz * (0.64 + 0.22 * sunNorm) +
+      24 +
+      44 * tempNorm +
+      70 * Math.pow(x, 1.4) +
+      26 * elevationNorm;
     const subHz = baseHz / 2;
 
     const cutoffBase = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);

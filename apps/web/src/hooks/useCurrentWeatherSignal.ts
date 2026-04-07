@@ -11,6 +11,7 @@ export type WeatherSignal = {
   isDay: boolean;
   latitude: number;
   longitude: number;
+  elevationM: number;
   rainMm: number;
   precipitationMm: number;
   dailyRainMm: number;
@@ -33,6 +34,7 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   isDay: true,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
+  elevationM: 10,
   rainMm: 0,
   precipitationMm: 0,
   dailyRainMm: 0,
@@ -133,6 +135,7 @@ export function useCurrentWeatherSignal() {
           isDay: Boolean(current.is_day),
           latitude: coords.lat,
           longitude: coords.lon,
+          elevationM: Number(payload.elevation) || DEFAULT_SIGNAL.elevationM,
           rainMm: Number(current.rain) || 0,
           precipitationMm: Number(current.precipitation) || 0,
           dailyRainMm: Number(daily.rain_sum?.[0]) || 0,
@@ -146,6 +149,7 @@ export function useCurrentWeatherSignal() {
           ...current,
           latitude: coords.lat,
           longitude: coords.lon,
+          elevationM: current.elevationM || DEFAULT_SIGNAL.elevationM,
           status: locationError ? "fallback" : "error",
         }));
       }
