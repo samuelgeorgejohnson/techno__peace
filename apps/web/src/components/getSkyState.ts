@@ -76,15 +76,15 @@ export function getSkyState({
   const goldenWarmth = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
   const dayBlue = smoothstep(8, 45, sun);
 
-  const nightTop: [number, number, number] = [4, 8, 20];
+  const nightTop: [number, number, number] = [2, 5, 14];
   const dawnTop: [number, number, number] = [34, 53, 92];
   const dayTop: [number, number, number] = [74, 139, 226];
 
-  const nightMid: [number, number, number] = [10, 15, 31];
+  const nightMid: [number, number, number] = [6, 10, 24];
   const dawnMid: [number, number, number] = [77, 105, 162];
   const dayMid: [number, number, number] = [126, 182, 244];
 
-  const nightHorizon: [number, number, number] = [18, 21, 36];
+  const nightHorizon: [number, number, number] = [10, 14, 28];
   const dawnHorizon: [number, number, number] = [222, 144, 112];
   const dayHorizon: [number, number, number] = [186, 214, 252];
 
@@ -92,7 +92,7 @@ export function getSkyState({
   const midBase = blendRgb(blendRgb(nightMid, dawnMid, dayness), dayMid, dayBlue);
   const horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.6, dayness * 0.72)), dayHorizon, dayBlue);
 
-  const overcastTint: [number, number, number] = [132, 145, 166];
+  const overcastTint = blendRgb([44, 52, 76], [132, 145, 166], dayness);
   const cloudMute = smoothstep(0.35, 1, cloud) * (0.4 + 0.24 * dayness);
 
   const topColor = toRgbString(blendRgb(topBase, overcastTint, cloudMute));

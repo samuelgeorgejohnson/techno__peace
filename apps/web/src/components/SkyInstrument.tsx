@@ -82,6 +82,8 @@ export default function SkyInstrument() {
     [weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
   );
   const nightness = 1 - sky.dayness;
+  const cloudAlpha = 0.06 + sky.dayness * 0.18;
+  const cloudAlphaDense = 0.18 + sky.dayness * 0.38;
 
   function audioParams(nextPt: Pt) {
     return {
@@ -229,7 +231,7 @@ export default function SkyInstrument() {
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
-        filter: `brightness(${0.52 + sky.brightness * 0.68}) saturate(${0.82 + sky.dayness * 0.3})`,
+        filter: `brightness(${0.34 + sky.brightness * 0.72}) saturate(${0.68 + sky.dayness * 0.4}) contrast(${0.95 + nightness * 0.16})`,
         transition: "background 900ms ease, filter 900ms ease",
       }}
     >
@@ -237,6 +239,18 @@ export default function SkyInstrument() {
         {`@keyframes tp-cloud-drift-a { from { transform: translateX(-8%); } to { transform: translateX(8%); } }
           @keyframes tp-cloud-drift-b { from { transform: translateX(10%); } to { transform: translateX(-10%); } }`}
       </style>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "-8%",
+          pointerEvents: "none",
+          background: "radial-gradient(1200px 740px at 50% 52%, rgba(0, 0, 0, 0), rgba(0, 4, 16, 0.55) 72%, rgba(0, 0, 0, 0.86) 100%)",
+          opacity: nightness * 0.72,
+          zIndex: 0,
+          mixBlendMode: "multiply",
+        }}
+      />
       <div
         aria-hidden="true"
         style={{
@@ -284,10 +298,10 @@ export default function SkyInstrument() {
           animation: `tp-cloud-drift-a ${Math.max(24, 170 / sky.cloudSpeed)}s linear infinite`,
           background:
             sky.cloudDensity === "low"
-              ? "radial-gradient(800px 360px at 18% 20%, rgba(255,255,255,0.14), transparent 62%), radial-gradient(900px 380px at 78% 36%, rgba(255,255,255,0.13), transparent 64%)"
+              ? `radial-gradient(800px 360px at 18% 20%, rgba(255,255,255,${cloudAlpha}), transparent 62%), radial-gradient(900px 380px at 78% 36%, rgba(255,255,255,${cloudAlpha * 0.92}), transparent 64%)`
               : sky.cloudDensity === "medium"
-                ? "linear-gradient(185deg, rgba(255,255,255,0.20) 4%, rgba(255,255,255,0.09) 20%, rgba(255,255,255,0) 34%), radial-gradient(1000px 420px at 16% 26%, rgba(255,255,255,0.16), transparent 66%), radial-gradient(1100px 500px at 74% 34%, rgba(255,255,255,0.15), transparent 70%)"
-                : "linear-gradient(180deg, rgba(225,232,242,0.55) 0%, rgba(210,220,236,0.38) 30%, rgba(190,201,219,0.30) 64%, rgba(184,196,214,0.26) 100%)",
+                ? `linear-gradient(185deg, rgba(255,255,255,${cloudAlphaDense}) 4%, rgba(255,255,255,${cloudAlpha * 0.75}) 20%, rgba(255,255,255,0) 34%), radial-gradient(1000px 420px at 16% 26%, rgba(255,255,255,${cloudAlpha * 1.1}), transparent 66%), radial-gradient(1100px 500px at 74% 34%, rgba(255,255,255,${cloudAlpha}), transparent 70%)`
+                : `linear-gradient(180deg, rgba(225,232,242,${0.2 + sky.dayness * 0.35}) 0%, rgba(210,220,236,${0.14 + sky.dayness * 0.24}) 30%, rgba(190,201,219,${0.1 + sky.dayness * 0.2}) 64%, rgba(184,196,214,${0.08 + sky.dayness * 0.18}) 100%)`,
         }}
       />
       <div
