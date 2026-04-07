@@ -73,6 +73,7 @@ export default function SkyInstrument({
   const [hasUnlockedAudio, setHasUnlockedAudio] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
+  const [geoPanelExpanded, setGeoPanelExpanded] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
@@ -356,9 +357,44 @@ export default function SkyInstrument({
           display: "grid",
           gap: 8,
           minWidth: 220,
+          width: geoPanelExpanded ? "min(460px, calc(100vw - 32px))" : "min(280px, calc(100vw - 32px))",
         }}
       >
-        <div style={{ letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION + MIXER</div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+          }}
+        >
+          <div style={{ letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION + MIXER</div>
+          <button
+            type="button"
+            onPointerDown={stopMixerEvent}
+            onClick={(e) => {
+              e.stopPropagation();
+              setGeoPanelExpanded((open) => !open);
+            }}
+            aria-label={geoPanelExpanded ? "Collapse geolocation details" : "Expand geolocation details"}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 999,
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.94)",
+              fontSize: 20,
+              lineHeight: 1,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            {geoPanelExpanded ? "−" : "+"}
+          </button>
+        </div>
         <button
           type="button"
           onPointerDown={stopMixerEvent}
@@ -417,6 +453,25 @@ export default function SkyInstrument({
           lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
         </div>
         <div>weather: {weather.status}</div>
+        {geoPanelExpanded && (
+          <>
+            <div>
+              x: {pt.x.toFixed(2)} y: {pt.y.toFixed(2)}
+            </div>
+            <div>pressure: {pt.pressure.toFixed(2)}</div>
+            <div>phase: {sky.phase}</div>
+            <div>
+              cloud: {Math.round(weather.cloudCover * 100)}% wind: {weather.windMps.toFixed(1)} m/s
+            </div>
+            <div>humidity: {Math.round(weather.humidityPct)}%</div>
+            <div>rain: {weather.rainMm.toFixed(2)} mm</div>
+            <div>precip: {weather.precipitationMm.toFixed(2)} mm</div>
+            <div>daily rain: {weather.dailyRainMm.toFixed(2)} mm</div>
+            <div>
+              temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
+            </div>
+          </>
+        )}
       </div>
 
       <div
