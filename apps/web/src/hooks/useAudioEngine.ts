@@ -4,6 +4,8 @@ export type AudioParams = {
   x: number;
   y: number;
   pressure: number;
+  latitude: number;
+  longitude: number;
   cloudCover: number;
   windMps: number;
   humidityPct: number;
@@ -19,6 +21,29 @@ export type AudioParams = {
 
 function clamp(x: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, x));
+}
+
+function fractional(x: number) {
+  return x - Math.floor(x);
+}
+
+function derivePlaceBaseFrequency(latitude: number, longitude: number) {
+  const lat = clamp((latitude + 90) / 180);
+  const lon = clamp((longitude + 180) / 360);
+  const seedA = fractional(
+    Math.sin((latitude + 90) * 12.9898 + (longitude + 180) * 78.233) * 43758.5453,
+  );
+  const seedB = fractional(
+    Math.sin((latitude + 90) * 39.3467 + (longitude + 180) * 11.1351) * 19642.349,
+  );
+
+  const modeSteps = [0, 2, 3, 5, 7, 8, 10];
+  const degree = modeSteps[Math.floor(seedA * modeSteps.length)];
+  const octave = 2 + Math.floor((0.58 * lat + 0.42 * lon) * 3);
+  const baseMidi = 36 + octave * 12 + degree;
+  const microDetuneCents = (seedB - 0.5) * 14;
+
+  return 440 * Math.pow(2, (baseMidi - 69) / 12) * Math.pow(2, microDetuneCents / 1200);
 }
 
 export function useAudioEngine() {
@@ -155,7 +180,16 @@ export function useAudioEngine() {
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
-    const baseHz = 48 + 110 * sunNorm + 96 * tempNorm + 110 * Math.pow(x, 1.4);
+    const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
+    const centerTuneSemitones = (x - 0.5) * 12;
+    const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
+    const weatherPitchMod =
+      1 +
+      0.22 * (sunNorm - 0.5) +
+      0.18 * (tempNorm - 0.5) +
+      0.08 * (pressure - 0.5) +
+      0.06 * (cloudCover - 0.5);
+    const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
 
     const cutoffBase = 240 + 2600 * windNorm + 2400 * Math.pow(1 - y, 1.8);
