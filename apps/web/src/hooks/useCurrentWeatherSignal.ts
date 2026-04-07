@@ -6,6 +6,9 @@ export type WeatherSignal = {
   windMps: number;
   humidityPct: number;
   sunAltitudeDeg: number;
+  sunAzimuthDeg: number;
+  sunriseMs: number;
+  sunsetMs: number;
   moonPhase: number;
   temperatureC: number;
   isDay: boolean;
@@ -28,6 +31,9 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   windMps: 3.2,
   humidityPct: 58,
   sunAltitudeDeg: -24,
+  sunAzimuthDeg: 0,
+  sunriseMs: 0,
+  sunsetMs: 0,
   moonPhase: 0.5,
   temperatureC: 18,
   isDay: false,
@@ -71,6 +77,17 @@ function estimateSunAltitude(nowIso: string, sunriseIso?: string, sunsetIso?: st
   const nightSpan = Math.max(nextSunrise - lastSunset, 1);
   const nightProgress = clamp((now - lastSunset) / nightSpan, 0, 1);
   return -Math.sin(nightProgress * Math.PI) * 90;
+}
+
+function getDayProgress(nowMs: number, sunriseMs: number, sunsetMs: number) {
+  if (!sunriseMs || !sunsetMs || sunsetMs <= sunriseMs) return 0;
+  return clamp((nowMs - sunriseMs) / (sunsetMs - sunriseMs), 0, 1);
+}
+
+function estimateSunAzimuth(nowMs: number, sunriseMs: number, sunsetMs: number) {
+  // TODO: replace with real solar azimuth from live astronomy/weather source when available.
+  const dayProgress = getDayProgress(nowMs, sunriseMs, sunsetMs);
+  return -90 + dayProgress * 180;
 }
 
 export function useCurrentWeatherSignal() {
@@ -122,12 +139,18 @@ export function useCurrentWeatherSignal() {
         const currentTime = typeof current.time === "string" ? current.time : new Date().toISOString();
         const sunrise = daily.sunrise?.[0];
         const sunset = daily.sunset?.[0];
+        const sunriseMs = sunrise ? new Date(sunrise).getTime() : 0;
+        const sunsetMs = sunset ? new Date(sunset).getTime() : 0;
+        const currentMs = new Date(currentTime).getTime();
 
         setSignal({
           cloudCover: clamp((Number(current.cloud_cover) || 0) / 100, 0, 1),
           windMps: Math.max(Number(current.wind_speed_10m) || 0, 0) / 3.6,
           humidityPct: clamp(Number(current.relative_humidity_2m) || 0, 0, 100),
           sunAltitudeDeg: estimateSunAltitude(currentTime, sunrise, sunset),
+          sunAzimuthDeg: estimateSunAzimuth(currentMs, sunriseMs, sunsetMs),
+          sunriseMs,
+          sunsetMs,
           moonPhase: estimateMoonPhase(new Date(currentTime)),
           temperatureC: Number(current.temperature_2m) || 0,
           isDay: Boolean(current.is_day),
@@ -145,6 +168,9 @@ export function useCurrentWeatherSignal() {
         setSignal((current) => ({
           ...current,
           sunAltitudeDeg: current.status === "live" ? current.sunAltitudeDeg : -24,
+          sunAzimuthDeg: current.status === "live" ? current.sunAzimuthDeg : 0,
+          sunriseMs: current.status === "live" ? current.sunriseMs : 0,
+          sunsetMs: current.status === "live" ? current.sunsetMs : 0,
           isDay: current.status === "live" ? current.isDay : false,
           latitude: coords.lat,
           longitude: coords.lon,
