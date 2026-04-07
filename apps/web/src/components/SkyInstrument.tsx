@@ -8,33 +8,22 @@ function clamp01(x: number) {
 }
 
 type Pt = { x: number; y: number; pressure: number };
-type Channel = { id: string; name: string; detail: string; level: number };
-type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
+type EnvChannelId = "wind" | "rain" | "humidity";
+type ChannelView = {
+  id: EnvChannelId;
+  name: string;
+  detail: string;
+  rawLabel: string;
+  rawPct: number;
+  mixPct: number;
+  effectivePct: number;
+};
 
-const initialMixerPages: MixerPage[] = [
-  {
-    id: "weather",
-    title: "Weather channels",
-    blurb: "Blend the sky's natural voices into the instrument.",
-    channels: [
-      { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets", level: 74 },
-      { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
-      { id: "thunder", name: "Thunder", detail: "Low rolls and distant strikes", level: 36 },
-      { id: "waves", name: "Waves", detail: "Slow surf and shoreline wash", level: 44 },
-    ],
-  },
-  {
-    id: "man-made",
-    title: "Man-made channels",
-    blurb: "Shape the urban and mechanical layers around the weather bed.",
-    channels: [
-      { id: "train", name: "Train", detail: "Steel rhythm and rail hum", level: 29 },
-      { id: "traffic", name: "Traffic", detail: "Passing tires and city motion", level: 52 },
-      { id: "factory", name: "Factory", detail: "Machine drones and clanks", level: 24 },
-      { id: "harbor", name: "Harbor", detail: "Buoys, horns, and distant engines", level: 33 },
-    ],
-  },
-];
+function placeToneFromLocation(latitude: number, longitude: number, elevationM: number) {
+  const seed = Math.sin(latitude * 12.9898 + longitude * 78.233 + elevationM * 0.00153) * 43758.5453;
+  const normalized = seed - Math.floor(seed);
+  return 72 + normalized * 220;
+}
 
 function FadersIcon() {
   return (
@@ -62,14 +51,55 @@ export default function SkyInstrument() {
   const [hasUnlockedAudio, setHasUnlockedAudio] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
-  const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
-  const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
+  const [mixMultipliersPct, setMixMultipliersPct] = useState<Record<EnvChannelId, number>>({
+    wind: 100,
+    rain: 100,
+    humidity: 100,
+  });
+  const placeToneHz = useMemo(
+    () => placeToneFromLocation(weather.latitude, weather.longitude, weather.elevationM),
+    [weather.elevationM, weather.latitude, weather.longitude],
+  );
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
-  const activePage = useMemo(
-    () => mixerPages.find((page) => page.id === activePageId) ?? mixerPages[0],
-    [activePageId, mixerPages],
+  const windRawPct = clamp01(weather.windMps / 20) * 100;
+  const rainRawPct = clamp01((weather.rainMm + weather.showersMm) / 6) * 100;
+  const humidityRawPct = clamp01(weather.humidityPct / 100) * 100;
+  const windEffectivePct = windRawPct * (mixMultipliersPct.wind / 100);
+  const rainEffectivePct = rainRawPct * (mixMultipliersPct.rain / 100);
+  const humidityEffectivePct = humidityRawPct * (mixMultipliersPct.humidity / 100);
+  const channelViews = useMemo<ChannelView[]>(
+    () => [
+      {
+        id: "wind",
+        name: "Wind",
+        detail: "Gust movement and air turbulence",
+        rawLabel: `${weather.windMps.toFixed(1)} m/s`,
+        rawPct: windRawPct,
+        mixPct: mixMultipliersPct.wind,
+        effectivePct: windEffectivePct,
+      },
+      {
+        id: "rain",
+        name: "Rain",
+        detail: "Rain + shower intensity",
+        rawLabel: `${(weather.rainMm + weather.showersMm).toFixed(2)} mm`,
+        rawPct: rainRawPct,
+        mixPct: mixMultipliersPct.rain,
+        effectivePct: rainEffectivePct,
+      },
+      {
+        id: "humidity",
+        name: "Humidity",
+        detail: "Air saturation and diffusion",
+        rawLabel: `${weather.humidityPct.toFixed(0)}%`,
+        rawPct: humidityRawPct,
+        mixPct: mixMultipliersPct.humidity,
+        effectivePct: humidityEffectivePct,
+      },
+    ],
+    [humidityEffectivePct, humidityRawPct, mixMultipliersPct.humidity, mixMultipliersPct.rain, mixMultipliersPct.wind, rainEffectivePct, rainRawPct, weather.humidityPct, weather.rainMm, weather.showersMm, weather.windMps, windEffectivePct, windRawPct],
   );
   const sky = useMemo(
     () =>
@@ -90,6 +120,13 @@ export default function SkyInstrument() {
       sunAltitudeDeg: weather.sunAltitudeDeg,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
+      latitude: weather.latitude,
+      longitude: weather.longitude,
+      elevationM: weather.elevationM,
+      placeToneHz,
+      windMix: mixMultipliersPct.wind / 100,
+      rainMix: mixMultipliersPct.rain / 100,
+      humidityMix: mixMultipliersPct.humidity / 100,
       rainMm: weather.rainMm,
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
@@ -100,7 +137,7 @@ export default function SkyInstrument() {
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, mixMultipliersPct.humidity, mixMultipliersPct.rain, mixMultipliersPct.wind, placeToneHz, pt, update, weather.cloudCover, weather.dailyRainMm, weather.elevationM, weather.humidityPct, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
 
   useEffect(
     () => () => {
@@ -194,19 +231,8 @@ export default function SkyInstrument() {
     e.stopPropagation();
   }
 
-  function updateChannelLevel(pageId: string, channelId: string, level: number) {
-    setMixerPages((pages) =>
-      pages.map((page) =>
-        page.id !== pageId
-          ? page
-          : {
-              ...page,
-              channels: page.channels.map((channel) =>
-                channel.id === channelId ? { ...channel, level } : channel,
-              ),
-            },
-      ),
-    );
+  function updateMixMultiplier(channelId: EnvChannelId, level: number) {
+    setMixMultipliersPct((current) => ({ ...current, [channelId]: level }));
   }
 
   return (
@@ -377,6 +403,11 @@ export default function SkyInstrument() {
           cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
         </div>
         <div>humidity: {weather.humidityPct.toFixed(0)}%</div>
+        <div>
+          lat/lon: {weather.latitude.toFixed(4)}, {weather.longitude.toFixed(4)}
+        </div>
+        <div>elevation: {weather.elevationM.toFixed(0)} m</div>
+        <div>F₀: {placeToneHz.toFixed(1)} Hz</div>
         <div>rain: {weather.rainMm.toFixed(2)} mm</div>
         <div>precip: {weather.precipitationMm.toFixed(2)} mm</div>
         <div>daily rain: {weather.dailyRainMm.toFixed(2)} mm</div>
@@ -385,7 +416,7 @@ export default function SkyInstrument() {
         </div>
       </div>
 
-      {mixerOpen && activePage && (
+      {mixerOpen && (
         <div
           onPointerDown={stopMixerEvent}
           style={{
@@ -431,7 +462,7 @@ export default function SkyInstrument() {
                     color: "rgba(182, 208, 255, 0.74)",
                   }}
                 >
-                  Mixer pages
+                  Live environment mixer
                 </div>
                 <h2
                   style={{
@@ -440,7 +471,7 @@ export default function SkyInstrument() {
                     color: "white",
                   }}
                 >
-                  {activePage.title}
+                  Real environmental influence
                 </h2>
                 <p
                   style={{
@@ -450,37 +481,8 @@ export default function SkyInstrument() {
                     color: "rgba(255,255,255,0.72)",
                   }}
                 >
-                  {activePage.blurb}
+                  Each channel shows raw weather input, your mix multiplier, and the effective value sent to audio.
                 </p>
-              </div>
-
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {mixerPages.map((page) => {
-                  const isActive = page.id === activePage.id;
-                  return (
-                    <button
-                      key={page.id}
-                      type="button"
-                      onPointerDown={stopMixerEvent}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActivePageId(page.id);
-                      }}
-                      style={{
-                        padding: "12px 16px",
-                        borderRadius: 14,
-                        border: isActive
-                          ? "1px solid rgba(140,200,255,0.45)"
-                          : "1px solid rgba(255,255,255,0.10)",
-                        background: isActive ? "rgba(120, 168, 255, 0.2)" : "rgba(255,255,255,0.04)",
-                        color: "white",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {page.title}
-                    </button>
-                  );
-                })}
               </div>
             </div>
 
@@ -492,7 +494,7 @@ export default function SkyInstrument() {
                 alignItems: "end",
               }}
             >
-              {activePage.channels.map((channel) => (
+              {channelViews.map((channel) => (
                 <div
                   key={channel.id}
                   style={{
@@ -527,27 +529,40 @@ export default function SkyInstrument() {
                   <div
                     style={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "end",
                       justifyContent: "space-between",
                       color: "rgba(255,255,255,0.82)",
                     }}
                   >
-                    <span>Level</span>
-                    <strong>{channel.level}%</strong>
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <span>Raw live</span>
+                      <strong>{channel.rawLabel}</strong>
+                    </div>
+                    <strong>{channel.rawPct.toFixed(0)}%</strong>
                   </div>
 
                   <input
                     type="range"
                     min={0}
-                    max={100}
-                    value={channel.level}
+                    max={200}
+                    value={channel.mixPct}
                     onPointerDown={stopMixerEvent}
-                    onChange={(e) =>
-                      updateChannelLevel(activePage.id, channel.id, Number(e.currentTarget.value))
-                    }
-                    aria-label={`${channel.name} level`}
+                    onChange={(e) => updateMixMultiplier(channel.id, Number(e.currentTarget.value))}
+                    aria-label={`${channel.name} multiplier`}
                     style={{ writingMode: "vertical-lr", width: "100%", height: 160 }}
                   />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      color: "rgba(255,255,255,0.82)",
+                    }}
+                  >
+                    <span>Mix multiplier</span>
+                    <strong>{channel.mixPct.toFixed(0)}%</strong>
+                  </div>
 
                   <div
                     style={{
@@ -560,12 +575,23 @@ export default function SkyInstrument() {
                   >
                     <div
                       style={{
-                        width: `${channel.level}%`,
+                        width: `${Math.min(channel.effectivePct, 100)}%`,
                         height: "100%",
                         background:
                           "linear-gradient(90deg, rgba(120, 176, 255, 0.85), rgba(182, 214, 255, 0.95))",
                       }}
                     />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      color: "rgba(210,230,255,0.95)",
+                    }}
+                  >
+                    <span>Effective to audio</span>
+                    <strong>{channel.effectivePct.toFixed(0)}%</strong>
                   </div>
                 </div>
               ))}
