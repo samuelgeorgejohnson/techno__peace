@@ -84,6 +84,8 @@ export default function SkyInstrument() {
   function audioParams(nextPt: Pt) {
     return {
       ...nextPt,
+      latitude: weather.latitude,
+      longitude: weather.longitude,
       cloudCover: weather.cloudCover,
       windMps: weather.windMps,
       humidityPct: weather.humidityPct,
@@ -291,44 +293,65 @@ export default function SkyInstrument() {
         }}
       />
 
-      <button
-        type="button"
+      <div
         onPointerDown={stopMixerEvent}
-        onClick={(e) => {
-          e.stopPropagation();
-          setMixerOpen((open) => !open);
-        }}
-        aria-label={mixerOpen ? "Close mixer" : "Open mixer"}
         style={{
           position: "absolute",
-          top: 18,
-          right: 18,
+          top: 16,
+          left: 16,
           zIndex: 3,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "12px 14px",
-          borderRadius: 16,
-          border: "1px solid rgba(255,255,255,0.14)",
-          background: mixerOpen ? "rgba(102, 156, 255, 0.24)" : "rgba(0,0,0,0.35)",
-          color: "rgba(255,255,255,0.94)",
-          boxShadow: "0 12px 30px rgba(0, 0, 0, 0.25)",
-          backdropFilter: "blur(12px)",
-          cursor: "pointer",
+          padding: 12,
+          borderRadius: 14,
+          background: "rgba(0,0,0,0.35)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          color: "rgba(255,255,255,0.9)",
+          fontSize: 12,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          backdropFilter: "blur(10px)",
+          display: "grid",
+          gap: 8,
+          minWidth: 220,
         }}
       >
-        <FadersIcon />
-        <span
+        <button
+          type="button"
+          onPointerDown={stopMixerEvent}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMixerOpen((open) => !open);
+          }}
+          aria-label={mixerOpen ? "Close mixer" : "Open mixer"}
           style={{
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: mixerOpen ? "rgba(102, 156, 255, 0.24)" : "rgba(255,255,255,0.06)",
+            color: "rgba(255,255,255,0.94)",
+            cursor: "pointer",
           }}
         >
-          Mixer
-        </span>
-      </button>
+          <FadersIcon />
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: "0.16em",
+              textTransform: "uppercase",
+            }}
+          >
+            Mixer
+          </span>
+        </button>
+        <div>audio: {isRunning ? "on" : "off"}</div>
+        <div>
+          lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
+        </div>
+        <div>weather: {weather.status}</div>
+      </div>
 
       <div
         style={{
@@ -348,42 +371,6 @@ export default function SkyInstrument() {
           zIndex: 1,
         }}
       />
-
-      <div
-        style={{
-          position: "absolute",
-          right: 16,
-          bottom: 16,
-          padding: "10px 12px",
-          borderRadius: 14,
-          background: "rgba(0,0,0,0.35)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          color: "rgba(255,255,255,0.86)",
-          fontSize: 12,
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          backdropFilter: "blur(10px)",
-          pointerEvents: "none",
-          zIndex: 3,
-        }}
-      >
-        <div>audio: {isRunning ? "on" : "off"}</div>
-        <div>
-          x: {pt.x.toFixed(2)} y: {pt.y.toFixed(2)}
-        </div>
-        <div>pressure: {pt.pressure.toFixed(2)}</div>
-        <div>weather: {weather.status}</div>
-        <div>phase: {sky.phase}</div>
-        <div>
-          cloud: {(weather.cloudCover * 100).toFixed(0)}% wind: {weather.windMps.toFixed(1)} m/s
-        </div>
-        <div>humidity: {weather.humidityPct.toFixed(0)}%</div>
-        <div>rain: {weather.rainMm.toFixed(2)} mm</div>
-        <div>precip: {weather.precipitationMm.toFixed(2)} mm</div>
-        <div>daily rain: {weather.dailyRainMm.toFixed(2)} mm</div>
-        <div>
-          temp: {weather.temperatureC.toFixed(1)}°C sun: {weather.sunAltitudeDeg.toFixed(0)}°
-        </div>
-      </div>
 
       {mixerOpen && activePage && (
         <div
