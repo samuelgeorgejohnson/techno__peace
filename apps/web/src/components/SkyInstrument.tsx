@@ -8,6 +8,7 @@ function clamp01(x: number) {
 }
 
 type Pt = { x: number; y: number; pressure: number };
+type Splash = { id: number; x: number; y: number };
 type Channel = { id: string; name: string; detail: string; level: number };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
 
@@ -64,6 +65,8 @@ export default function SkyInstrument() {
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
+  const [splashes, setSplashes] = useState<Splash[]>([]);
+  const splashIdRef = useRef(0);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
@@ -127,6 +130,14 @@ export default function SkyInstrument() {
     return { x, y };
   }
 
+  function triggerSplash(x: number, y: number) {
+    const id = splashIdRef.current++;
+    setSplashes((current) => [...current, { id, x, y }]);
+    window.setTimeout(() => {
+      setSplashes((current) => current.filter((splash) => splash.id !== id));
+    }, 750);
+  }
+
   async function unlockAndFadeIn() {
     if (fadeFrameRef.current !== null) {
       cancelAnimationFrame(fadeFrameRef.current);
@@ -169,6 +180,7 @@ export default function SkyInstrument() {
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
     setIsDragging(true);
+    triggerSplash(x, y);
     setPt({ x, y, pressure });
     update(audioParams({ x, y, pressure }));
   }
@@ -239,8 +251,30 @@ export default function SkyInstrument() {
     >
       <style>
         {`@keyframes tp-cloud-drift-a { from { transform: translateX(-8%); } to { transform: translateX(8%); } }
-          @keyframes tp-cloud-drift-b { from { transform: translateX(10%); } to { transform: translateX(-10%); } }`}
+          @keyframes tp-cloud-drift-b { from { transform: translateX(10%); } to { transform: translateX(-10%); } }
+          @keyframes tp-splash-ring {
+            0% { transform: translate(-50%, -50%) scale(0.25); opacity: 0.72; }
+            100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+          }`}
       </style>
+      {splashes.map((splash) => (
+        <div
+          key={splash.id}
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: `${splash.x * 100}%`,
+            top: `${splash.y * 100}%`,
+            width: 26,
+            height: 26,
+            borderRadius: 999,
+            border: "2px solid rgba(188, 232, 255, 0.8)",
+            pointerEvents: "none",
+            zIndex: 1,
+            animation: "tp-splash-ring 720ms ease-out forwards",
+          }}
+        />
+      ))}
       <div
         aria-hidden="true"
         style={{
