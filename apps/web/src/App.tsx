@@ -54,43 +54,11 @@ export default function App() {
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <SkyInstrument />
-
-      <div
-        style={{
-          position: "absolute",
-          top: 16,
-          left: 16,
-          maxWidth: "min(420px, calc(100vw - 32px))",
-          padding: "12px 14px",
-          borderRadius: 14,
-          background: "rgba(0,0,0,0.42)",
-          border: "1px solid rgba(255,255,255,0.14)",
-          color: "rgba(255,255,255,0.9)",
-          backdropFilter: "blur(8px)",
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-          fontSize: 12,
-          lineHeight: 1.45,
-          zIndex: 2,
-        }}
-      >
-        <div style={{ marginBottom: 8, letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION</div>
-        <div style={{ marginBottom: 10, opacity: 0.9 }}>{locationText}</div>
-        <button
-          onClick={requestLocation}
-          disabled={isRequestingLocation}
-          style={{
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(255,255,255,0.08)",
-            color: "white",
-            padding: "8px 10px",
-            cursor: isRequestingLocation ? "wait" : "pointer",
-          }}
-        >
-          {isRequestingLocation ? "Requesting..." : "Request location"}
-        </button>
-      </div>
+      <SkyInstrument
+        locationText={locationText}
+        isRequestingLocation={isRequestingLocation}
+        onRequestLocation={requestLocation}
+      />
     </div>
   );
 }
