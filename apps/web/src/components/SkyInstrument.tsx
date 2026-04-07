@@ -52,7 +52,17 @@ function FadersIcon() {
   );
 }
 
-export default function SkyInstrument() {
+type SkyInstrumentProps = {
+  locationText: string;
+  isRequestingLocation: boolean;
+  onRequestLocation: () => void;
+};
+
+export default function SkyInstrument({
+  locationText,
+  isRequestingLocation,
+  onRequestLocation,
+}: SkyInstrumentProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
   const { start, update, isRunning } = useAudioEngine();
@@ -342,6 +352,7 @@ export default function SkyInstrument() {
           minWidth: 220,
         }}
       >
+        <div style={{ letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION + MIXER</div>
         <button
           type="button"
           onPointerDown={stopMixerEvent}
@@ -374,6 +385,26 @@ export default function SkyInstrument() {
           >
             Mixer
           </span>
+        </button>
+        <div style={{ opacity: 0.9 }}>{locationText}</div>
+        <button
+          type="button"
+          onPointerDown={stopMixerEvent}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestLocation();
+          }}
+          disabled={isRequestingLocation}
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.2)",
+            background: "rgba(255,255,255,0.08)",
+            color: "white",
+            padding: "8px 10px",
+            cursor: isRequestingLocation ? "wait" : "pointer",
+          }}
+        >
+          {isRequestingLocation ? "Requesting..." : "Request location"}
         </button>
         <div>audio: {isRunning ? "on" : "off"}</div>
         <div>
