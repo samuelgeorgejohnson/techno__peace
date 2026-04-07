@@ -84,6 +84,8 @@ export default function SkyInstrument() {
   function audioParams(nextPt: Pt) {
     return {
       ...nextPt,
+      latitude: weather.latitude,
+      longitude: weather.longitude,
       cloudCover: weather.cloudCover,
       windMps: weather.windMps,
       humidityPct: weather.humidityPct,
