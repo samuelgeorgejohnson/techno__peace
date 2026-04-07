@@ -104,26 +104,14 @@ export default function SkyInstrument({
   function audioParams(nextPt: Pt) {
     return {
       ...nextPt,
-      latitude: weather.latitude,
-      longitude: weather.longitude,
-      cloudCover: weather.cloudCover,
-      windMps: weather.windMps,
-      humidityPct: weather.humidityPct,
-      sunAltitudeDeg: weather.sunAltitudeDeg,
-      isDay: weather.isDay,
-      moonPhase: weather.moonPhase,
-      temperatureC: weather.temperatureC,
-      rainMm: weather.rainMm,
-      precipitationMm: weather.precipitationMm,
-      dailyRainMm: weather.dailyRainMm,
-      showersMm: weather.showersMm,
+      signalModel: weather.signalModel,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [isRunning, pt, update, weather.signalModel]);
 
   useEffect(
     () => () => {
