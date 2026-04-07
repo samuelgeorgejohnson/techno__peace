@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { getSkyState } from "./getSkyState";
+import SplashIntro from "./SplashIntro";
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
@@ -64,6 +65,7 @@ export default function SkyInstrument() {
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
+  const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
@@ -84,6 +86,10 @@ export default function SkyInstrument() {
   const nightness = 1 - sky.dayness;
   const cloudAlpha = 0.06 + sky.dayness * 0.18;
   const cloudAlphaDense = 0.18 + sky.dayness * 0.38;
+
+  const shouldShowSplash =
+    !hasCompletedSplash &&
+    (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
 
   function audioParams(nextPt: Pt) {
     return {
@@ -590,7 +596,13 @@ export default function SkyInstrument() {
         </div>
       )}
 
-      {overlayVisible && !mixerOpen && (
+      {shouldShowSplash && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 8 }}>
+          <SplashIntro onComplete={() => setHasCompletedSplash(true)} sky={sky} />
+        </div>
+      )}
+
+      {overlayVisible && !mixerOpen && !shouldShowSplash && (
         <div
           style={{
             position: "absolute",
