@@ -18,7 +18,25 @@ export type AudioParams = {
   precipitationMm: number;
   dailyRainMm: number;
   showersMm: number;
+  windChimesLevel: number;
+  windChimeTuning: "place" | "solar" | "lunar" | "harmonic";
 };
+
+const CHIME_TUNINGS = {
+  place: [0, 2, 7, 9, 12],
+  solar: [0, 7, 2, 9, 4],
+  lunar: [0, 5, 10, 3, 8],
+  harmonic: [0, 7, 12, 14],
+} as const;
+
+function semitoneRatio(semitones: number) {
+  return Math.pow(2, semitones / 12);
+}
+
+function getChimeFreqs(placeFreq: number, tuningName: keyof typeof CHIME_TUNINGS = "place") {
+  const intervals = CHIME_TUNINGS[tuningName] || CHIME_TUNINGS.place;
+  return intervals.map((semi) => placeFreq * semitoneRatio(semi));
+}
 
 function clamp(x: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, x));
@@ -63,6 +81,7 @@ export function useAudioEngine() {
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
+  const lastChimeStrikeRef = useRef(0);
   const [isRunning, setIsRunning] = useState(false);
 
   function resetGraph() {
@@ -75,6 +94,60 @@ export function useAudioEngine() {
     lfoRef.current = null;
     lfoGainRef.current = null;
     startedRef.current = false;
+    lastChimeStrikeRef.current = 0;
+  }
+
+  function strikeChime(
+    ctx: AudioContext,
+    destination: AudioNode,
+    frequencyHz: number,
+    intensity: number,
+    brightnessHz: number,
+  ) {
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const tonal = ctx.createGain();
+    const brighten = ctx.createBiquadFilter();
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    const out = ctx.createGain();
+
+    osc.type = "triangle";
+    osc.frequency.value = frequencyHz;
+    shimmer.type = "sine";
+    shimmer.frequency.value = frequencyHz * 2;
+
+    brighten.type = "lowpass";
+    brighten.frequency.value = brightnessHz;
+    brighten.Q.value = 0.85;
+
+    tonal.gain.value = 0.0001;
+    shimmerGain.gain.value = 0.0001;
+    out.gain.value = 0.0001;
+
+    osc.connect(tonal);
+    shimmer.connect(shimmerGain);
+    tonal.connect(brighten);
+    shimmerGain.connect(brighten);
+    brighten.connect(out);
+    out.connect(destination);
+
+    tonal.gain.setValueAtTime(0.0001, now);
+    tonal.gain.exponentialRampToValueAtTime(Math.max(0.0002, intensity), now + 0.015);
+    tonal.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+    shimmerGain.gain.setValueAtTime(0.0001, now);
+    shimmerGain.gain.exponentialRampToValueAtTime(Math.max(0.00015, intensity * 0.35), now + 0.01);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52);
+
+    out.gain.setValueAtTime(0.0001, now);
+    out.gain.exponentialRampToValueAtTime(Math.max(0.0002, intensity * 0.9), now + 0.02);
+    out.gain.exponentialRampToValueAtTime(0.0001, now + 1.45);
+
+    osc.start(now);
+    shimmer.start(now);
+    osc.stop(now + 1.5);
+    shimmer.stop(now + 0.7);
   }
 
   function ensureContext(): AudioContext {
@@ -184,7 +257,7 @@ export function useAudioEngine() {
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
-    const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
+    const placeFreq = derivePlaceBaseFrequency(p.latitude, p.longitude);
     const centerTuneSemitones = (x - 0.5) * 12;
     const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
     const weatherPitchMod =
@@ -193,7 +266,7 @@ export function useAudioEngine() {
       0.18 * (tempNorm - 0.5) +
       0.08 * (pressure - 0.5) +
       0.06 * (cloudCover - 0.5);
-    const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
+    const baseHz = placeFreq * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
 
     const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
@@ -224,27 +297,56 @@ export function useAudioEngine() {
 
     const now = ctx.currentTime;
 
-// 🌧️ rain droplets (random ticks)
-if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
-  const click = ctx.createOscillator();
-  const clickGain = ctx.createGain();
+    // Wind controls activity (timing, density, and strike intensity), not pitch choice.
+    // Tuning controls harmonic language by selecting interval presets anchored to placeFreq.
+    // placeFreq remains the root reference for every chime tuning preset.
+    const levelNorm = clamp(p.windChimesLevel / 100);
+    const chimePool = getChimeFreqs(placeFreq, p.windChimeTuning);
+    const rainSoftening = 1 - 0.55 * rainNorm;
+    const density = clamp((0.08 + 0.92 * windNorm) * rainSoftening * levelNorm);
+    const triggerIntervalSec = 1.9 - 1.45 * windNorm;
+    const sinceLastStrike = now - lastChimeStrikeRef.current;
+    if (
+      chimePool.length > 0 &&
+      sinceLastStrike >= triggerIntervalSec &&
+      Math.random() < 0.18 + density * 0.72
+    ) {
+      // Optional variation: random note choice stays strictly within the selected tuning pool.
+      const freq = chimePool[Math.floor(Math.random() * chimePool.length)];
+      const cloudSoftness = 1 - 0.42 * cloudCover;
+      const strikeIntensity = (0.012 + 0.085 * windNorm) * cloudSoftness * levelNorm;
+      const brightness = 1200 + 2800 * (1 - cloudCover);
+      strikeChime(ctx, filterRef.current!, freq, strikeIntensity, brightness);
 
-  click.type = "triangle";
-  click.frequency.value = 800 + Math.random() * 1200;
+      // Higher wind can create occasional clustered events without leaving the tuning set.
+      if (Math.random() < density * 0.35) {
+        const secondFreq = chimePool[Math.floor(Math.random() * chimePool.length)];
+        strikeChime(ctx, filterRef.current!, secondFreq, strikeIntensity * 0.72, brightness * 0.9);
+      }
+      lastChimeStrikeRef.current = now;
+    }
 
-  clickGain.gain.value = 0.0001;
+    // 🌧️ rain droplets (random ticks)
+    if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
+      const click = ctx.createOscillator();
+      const clickGain = ctx.createGain();
 
-  click.connect(clickGain);
-  clickGain.connect(filterRef.current!);
+      click.type = "triangle";
+      click.frequency.value = 800 + Math.random() * 1200;
 
-  const t = now;
-  clickGain.gain.setValueAtTime(0.0001, t);
-  clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
-  clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+      clickGain.gain.value = 0.0001;
 
-  click.start(t);
-  click.stop(t + 0.1);
-}
+      click.connect(clickGain);
+      clickGain.connect(filterRef.current!);
+
+      const t = now;
+      clickGain.gain.setValueAtTime(0.0001, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+
+      click.start(t);
+      click.stop(t + 0.1);
+    }
 
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);

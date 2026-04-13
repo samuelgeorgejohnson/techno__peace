@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { getSkyState } from "./getSkyState";
+import { MIXER_VOICE } from "./mixerVoice";
 import SplashIntro from "./SplashIntro";
 
 function clamp01(x: number) {
@@ -11,6 +12,14 @@ function clamp01(x: number) {
 type Pt = { x: number; y: number; pressure: number };
 type Channel = { id: string; name: string; detail: string; level: number };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
+type ChimeTuningName = "place" | "solar" | "lunar" | "harmonic";
+
+const CHIME_TUNING_OPTIONS: Array<{ value: ChimeTuningName; label: string }> = [
+  { value: "place", label: "Place" },
+  { value: "solar", label: "Solar" },
+  { value: "lunar", label: "Lunar" },
+  { value: "harmonic", label: "Harmonic" },
+];
 
 const initialMixerPages: MixerPage[] = [
   {
@@ -18,8 +27,16 @@ const initialMixerPages: MixerPage[] = [
     title: "Weather channels",
     blurb: "Blend the sky's natural voices into the instrument.",
     channels: [
+      { id: "sun", name: MIXER_VOICE.sun.title, detail: MIXER_VOICE.sun.subtitle, level: 64 },
+      { id: "moon", name: MIXER_VOICE.moon.title, detail: MIXER_VOICE.moon.subtitle, level: 58 },
       { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets", level: 74 },
       { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
+      {
+        id: "wind-chimes",
+        name: MIXER_VOICE.windChimes.title,
+        detail: MIXER_VOICE.windChimes.subtitle,
+        level: 56,
+      },
       { id: "thunder", name: "Thunder", detail: "Low rolls and distant strikes", level: 36 },
       { id: "waves", name: "Waves", detail: "Slow surf and shoreline wash", level: 44 },
     ],
@@ -53,6 +70,33 @@ function FadersIcon() {
   );
 }
 
+function getWindChimeStatus(windMps: number, rainMm: number, cloudCover: number) {
+  if (windMps < 1.2) return "Waiting on the wind";
+  if (rainMm > 0.08) return "Rain softening the bells";
+  if (cloudCover > 0.78) return "Cloud cover dimming the highs";
+  if (windMps < 4.5) return "Soft breeze · sparse strikes";
+  if (windMps < 8.5) return "Moderate wind · open pattern";
+  return "Strong wind · active shimmer";
+}
+
+function getSunStatus(sunAltitudeDeg: number) {
+  if (sunAltitudeDeg < -4) return "Below the horizon";
+  if (sunAltitudeDeg < 8) return "Low on the horizon";
+  if (sunAltitudeDeg < 26) return "Rising into the field";
+  if (sunAltitudeDeg < 58) return "High and open";
+  if (sunAltitudeDeg < 78) return "Crossing overhead";
+  return "Falling toward dusk";
+}
+
+function getMoonStatus(sunAltitudeDeg: number, moonPhase: number, cloudCover: number) {
+  if (sunAltitudeDeg > 4) return "Below the horizon";
+  if (cloudCover > 0.78) return "Veiled by weather";
+  if (moonPhase > 0.78) return "Strong tonight";
+  if (moonPhase > 0.5) return "High and suspended";
+  if (moonPhase > 0.24) return "Rising softly";
+  return "Faint in the field";
+}
+
 type SkyInstrumentProps = {
   locationText: string;
   isRequestingLocation: boolean;
@@ -75,6 +119,7 @@ export default function SkyInstrument({
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
+  const [windChimeTuning, setWindChimeTuning] = useState<ChimeTuningName>("place");
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
@@ -100,6 +145,22 @@ export default function SkyInstrument({
   const shouldShowSplash =
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
+  const windChimeStatus = useMemo(
+    () => getWindChimeStatus(weather.windMps, weather.rainMm + weather.showersMm, weather.cloudCover),
+    [weather.cloudCover, weather.rainMm, weather.showersMm, weather.windMps],
+  );
+  const sunStatus = useMemo(() => getSunStatus(weather.sunAltitudeDeg), [weather.sunAltitudeDeg]);
+  const moonStatus = useMemo(
+    () => getMoonStatus(weather.sunAltitudeDeg, weather.moonPhase, weather.cloudCover),
+    [weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg],
+  );
+  const windChimesLevel = useMemo(
+    () =>
+      mixerPages
+        .find((page) => page.id === "weather")
+        ?.channels.find((channel) => channel.id === "wind-chimes")?.level ?? 0,
+    [mixerPages],
+  );
 
   function audioParams(nextPt: Pt) {
     return {
@@ -117,13 +178,19 @@ export default function SkyInstrument({
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
       showersMm: weather.showersMm,
+      windChimesLevel,
+      windChimeTuning,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+    const timer = window.setInterval(() => {
+      update(audioParams(pt));
+    }, 220);
+    return () => window.clearInterval(timer);
+  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps, windChimesLevel, windChimeTuning]);
 
   useEffect(
     () => () => {
@@ -601,6 +668,61 @@ export default function SkyInstrument({
                     aria-label={`${channel.name} level`}
                     style={{ writingMode: "vertical-lr", width: "100%", height: 160 }}
                   />
+
+                  {channel.id === "wind-chimes" && (
+                    <label style={{ display: "grid", gap: 6, color: "rgba(255,255,255,0.85)" }}>
+                      <span style={{ fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                        Tuning
+                      </span>
+                      <select
+                        value={windChimeTuning}
+                        onPointerDown={stopMixerEvent}
+                        onChange={(e) => setWindChimeTuning(e.currentTarget.value as ChimeTuningName)}
+                        aria-label="Wind Chimes tuning"
+                        style={{
+                          borderRadius: 10,
+                          border: "1px solid rgba(255,255,255,0.16)",
+                          background: "rgba(255,255,255,0.08)",
+                          color: "white",
+                          padding: "8px 10px",
+                        }}
+                      >
+                        {CHIME_TUNING_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value} style={{ color: "black" }}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.66)" }}>
+                        {MIXER_VOICE.windChimes.helper}
+                      </span>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(176, 208, 255, 0.86)" }}>
+                        {windChimeStatus}
+                      </span>
+                    </label>
+                  )}
+
+                  {channel.id === "sun" && (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.66)" }}>
+                        {MIXER_VOICE.sun.helper}
+                      </span>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(176, 208, 255, 0.86)" }}>
+                        {sunStatus}
+                      </span>
+                    </div>
+                  )}
+
+                  {channel.id === "moon" && (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.66)" }}>
+                        {MIXER_VOICE.moon.helper}
+                      </span>
+                      <span style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(176, 208, 255, 0.86)" }}>
+                        {moonStatus}
+                      </span>
+                    </div>
+                  )}
 
                   <div
                     style={{
