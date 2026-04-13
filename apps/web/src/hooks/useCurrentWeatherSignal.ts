@@ -11,6 +11,7 @@ export type WeatherSignal = {
   isDay: boolean;
   latitude: number;
   longitude: number;
+  altitudeM: number;
   rainMm: number;
   precipitationMm: number;
   dailyRainMm: number;
@@ -33,6 +34,7 @@ const DEFAULT_SIGNAL: WeatherSignal = {
   isDay: false,
   latitude: FALLBACK_COORDS.lat,
   longitude: FALLBACK_COORDS.lon,
+  altitudeM: 10,
   rainMm: 0,
   precipitationMm: 0,
   dailyRainMm: 0,
@@ -116,27 +118,29 @@ export function useCurrentWeatherSignal() {
         }
 
         const payload = await response.json();
-        const current = payload.current ?? {};
+        const currentWeather = payload.current ?? {};
         const daily = payload.daily ?? {};
 
-        const currentTime = typeof current.time === "string" ? current.time : new Date().toISOString();
+        const currentTime =
+          typeof currentWeather.time === "string" ? currentWeather.time : new Date().toISOString();
         const sunrise = daily.sunrise?.[0];
         const sunset = daily.sunset?.[0];
 
         setSignal({
-          cloudCover: clamp((Number(current.cloud_cover) || 0) / 100, 0, 1),
-          windMps: Math.max(Number(current.wind_speed_10m) || 0, 0) / 3.6,
-          humidityPct: clamp(Number(current.relative_humidity_2m) || 0, 0, 100),
+          cloudCover: clamp((Number(currentWeather.cloud_cover) || 0) / 100, 0, 1),
+          windMps: Math.max(Number(currentWeather.wind_speed_10m) || 0, 0) / 3.6,
+          humidityPct: clamp(Number(currentWeather.relative_humidity_2m) || 0, 0, 100),
           sunAltitudeDeg: estimateSunAltitude(currentTime, sunrise, sunset),
           moonPhase: estimateMoonPhase(new Date(currentTime)),
-          temperatureC: Number(current.temperature_2m) || 0,
-          isDay: Boolean(current.is_day),
+          temperatureC: Number(currentWeather.temperature_2m) || 0,
+          isDay: Boolean(currentWeather.is_day),
           latitude: coords.lat,
           longitude: coords.lon,
-          rainMm: Number(current.rain) || 0,
-          precipitationMm: Number(current.precipitation) || 0,
+          altitudeM: Number(payload.elevation) || DEFAULT_SIGNAL.altitudeM,
+          rainMm: Number(currentWeather.rain) || 0,
+          precipitationMm: Number(currentWeather.precipitation) || 0,
           dailyRainMm: Number(daily.rain_sum?.[0]) || 0,
-          showersMm: Number(current.showers) || 0,
+          showersMm: Number(currentWeather.showers) || 0,
           status: "live",
         });
       } catch (error) {
@@ -148,6 +152,7 @@ export function useCurrentWeatherSignal() {
           isDay: current.status === "live" ? current.isDay : false,
           latitude: coords.lat,
           longitude: coords.lon,
+          altitudeM: current.altitudeM || DEFAULT_SIGNAL.altitudeM,
           status: locationError ? "fallback" : "error",
         }));
       }

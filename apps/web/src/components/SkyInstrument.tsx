@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useAudioEngine } from "../hooks/useAudioEngine";
+import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { getSkyState } from "./getSkyState";
 import SplashIntro from "./SplashIntro";
@@ -9,7 +9,7 @@ function clamp01(x: number) {
 }
 
 type Pt = { x: number; y: number; pressure: number };
-type Channel = { id: string; name: string; detail: string; level: number };
+type Channel = { id: string; name: string; detail: string };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
 
 const initialMixerPages: MixerPage[] = [
@@ -18,10 +18,9 @@ const initialMixerPages: MixerPage[] = [
     title: "Weather channels",
     blurb: "Blend the sky's natural voices into the instrument.",
     channels: [
-      { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets", level: 74 },
-      { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
-      { id: "thunder", name: "Thunder", detail: "Low rolls and distant strikes", level: 36 },
-      { id: "waves", name: "Waves", detail: "Slow surf and shoreline wash", level: 44 },
+      { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets" },
+      { id: "wind", name: "Wind", detail: "Wide gusts and airy movement" },
+      { id: "humidity", name: "Humidity", detail: "Diffusion and wet air softness" },
     ],
   },
   {
@@ -29,13 +28,23 @@ const initialMixerPages: MixerPage[] = [
     title: "Man-made channels",
     blurb: "Shape the urban and mechanical layers around the weather bed.",
     channels: [
-      { id: "train", name: "Train", detail: "Steel rhythm and rail hum", level: 29 },
-      { id: "traffic", name: "Traffic", detail: "Passing tires and city motion", level: 52 },
-      { id: "factory", name: "Factory", detail: "Machine drones and clanks", level: 24 },
-      { id: "harbor", name: "Harbor", detail: "Buoys, horns, and distant engines", level: 33 },
+      { id: "train", name: "Train", detail: "Steel rhythm and rail hum" },
+      { id: "traffic", name: "Traffic", detail: "Passing tires and city motion" },
+      { id: "factory", name: "Factory", detail: "Machine drones and clanks" },
+      { id: "harbor", name: "Harbor", detail: "Buoys, horns, and distant engines" },
     ],
   },
 ];
+
+const INITIAL_MIX_LEVELS: Record<string, number> = {
+  wind: 100,
+  rain: 100,
+  humidity: 100,
+  train: 100,
+  traffic: 100,
+  factory: 100,
+  harbor: 100,
+};
 
 function FadersIcon() {
   return (
@@ -74,15 +83,29 @@ export default function SkyInstrument({
   const [isDragging, setIsDragging] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
-  const [mixerPages, setMixerPages] = useState<MixerPage[]>(initialMixerPages);
+  const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
   const activePage = useMemo(
-    () => mixerPages.find((page) => page.id === activePageId) ?? mixerPages[0],
-    [activePageId, mixerPages],
+    () => initialMixerPages.find((page) => page.id === activePageId) ?? initialMixerPages[0],
+    [activePageId],
   );
+  const rawWind = clamp01(weather.windMps / 20);
+  const rawRain = clamp01((weather.rainMm + weather.showersMm) / 5);
+  const rawHumidity = clamp01(weather.humidityPct / 100);
+  const windMix = (mixLevels.wind ?? 100) / 100;
+  const rainMix = (mixLevels.rain ?? 100) / 100;
+  const humidityMix = (mixLevels.humidity ?? 100) / 100;
+  const effectiveWind = clamp01(rawWind * windMix);
+  const effectiveRain = clamp01(rawRain * rainMix);
+  const effectiveHumidity = clamp01(rawHumidity * humidityMix);
+  const placeBaseHz = useMemo(
+    () => derivePlaceBaseFrequency(weather.latitude, weather.longitude),
+    [weather.latitude, weather.longitude],
+  );
+  const currentTonicHz = placeBaseHz * Math.pow(2, ((pt.x - 0.5) * 24) / 12);
   const sky = useMemo(
     () =>
       getSkyState({
@@ -106,24 +129,25 @@ export default function SkyInstrument({
       ...nextPt,
       latitude: weather.latitude,
       longitude: weather.longitude,
+      altitudeM: weather.altitudeM,
       cloudCover: weather.cloudCover,
-      windMps: weather.windMps,
-      humidityPct: weather.humidityPct,
+      windMps: effectiveWind * 20,
+      humidityPct: effectiveHumidity * 100,
       sunAltitudeDeg: weather.sunAltitudeDeg,
       isDay: weather.isDay,
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
-      rainMm: weather.rainMm,
+      rainMm: effectiveRain * 5,
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
-      showersMm: weather.showersMm,
+      showersMm: 0,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps]);
+  }, [effectiveHumidity, effectiveRain, effectiveWind, isRunning, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(
     () => () => {
@@ -217,19 +241,15 @@ export default function SkyInstrument({
     e.stopPropagation();
   }
 
-  function updateChannelLevel(pageId: string, channelId: string, level: number) {
-    setMixerPages((pages) =>
-      pages.map((page) =>
-        page.id !== pageId
-          ? page
-          : {
-              ...page,
-              channels: page.channels.map((channel) =>
-                channel.id === channelId ? { ...channel, level } : channel,
-              ),
-            },
-      ),
-    );
+  function updateChannelLevel(channelId: string, level: number) {
+    setMixLevels((prev) => ({ ...prev, [channelId]: level }));
+  }
+
+  function channelDisplayPercent(channelId: string) {
+    if (channelId === "wind") return Math.round(effectiveWind * 100);
+    if (channelId === "rain") return Math.round(effectiveRain * 100);
+    if (channelId === "humidity") return Math.round(effectiveHumidity * 100);
+    return mixLevels[channelId] ?? 100;
   }
 
   return (
@@ -417,6 +437,13 @@ export default function SkyInstrument({
           lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
         </div>
         <div>weather: {weather.status}</div>
+        <div>F₀ base: {placeBaseHz.toFixed(1)} Hz</div>
+        <div>tonic now: {currentTonicHz.toFixed(1)} Hz</div>
+        <div>wind raw/effective: {Math.round(rawWind * 100)}% / {Math.round(effectiveWind * 100)}%</div>
+        <div>rain raw/effective: {Math.round(rawRain * 100)}% / {Math.round(effectiveRain * 100)}%</div>
+        <div>
+          humidity raw/effective: {Math.round(rawHumidity * 100)}% / {Math.round(effectiveHumidity * 100)}%
+        </div>
       </div>
 
       <div
@@ -508,7 +535,7 @@ export default function SkyInstrument({
               </div>
 
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {mixerPages.map((page) => {
+                {initialMixerPages.map((page) => {
                   const isActive = page.id === activePage.id;
                   return (
                     <button
@@ -586,17 +613,17 @@ export default function SkyInstrument({
                     }}
                   >
                     <span>Level</span>
-                    <strong>{channel.level}%</strong>
+                    <strong>{channelDisplayPercent(channel.id)}%</strong>
                   </div>
 
                   <input
                     type="range"
                     min={0}
-                    max={100}
-                    value={channel.level}
+                    max={200}
+                    value={mixLevels[channel.id] ?? 100}
                     onPointerDown={stopMixerEvent}
                     onChange={(e) =>
-                      updateChannelLevel(activePage.id, channel.id, Number(e.currentTarget.value))
+                      updateChannelLevel(channel.id, Number(e.currentTarget.value))
                     }
                     aria-label={`${channel.name} level`}
                     style={{ writingMode: "vertical-lr", width: "100%", height: 160 }}
@@ -613,7 +640,7 @@ export default function SkyInstrument({
                   >
                     <div
                       style={{
-                        width: `${channel.level}%`,
+                        width: `${channelDisplayPercent(channel.id)}%`,
                         height: "100%",
                         background:
                           "linear-gradient(90deg, rgba(120, 176, 255, 0.85), rgba(182, 214, 255, 0.95))",
