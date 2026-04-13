@@ -6,6 +6,7 @@ export type AudioParams = {
   pressure: number;
   latitude: number;
   longitude: number;
+  altitudeM: number;
   cloudCover: number;
   windMps: number;
   humidityPct: number;
@@ -28,7 +29,7 @@ function fractional(x: number) {
   return x - Math.floor(x);
 }
 
-function derivePlaceBaseFrequency(latitude: number, longitude: number) {
+export function derivePlaceBaseFrequency(latitude: number, longitude: number) {
   const lat = clamp((latitude + 90) / 180);
   const lon = clamp((longitude + 180) / 360);
   const seedA = fractional(
@@ -183,22 +184,23 @@ export function useAudioEngine() {
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
-    
+
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
-    const centerTuneSemitones = (x - 0.5) * 12;
+    const centerTuneSemitones = (x - 0.5) * 24;
     const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
     const weatherPitchMod =
       1 +
-      0.22 * (sunNorm - 0.5) +
-      0.18 * (tempNorm - 0.5) +
-      0.08 * (pressure - 0.5) +
-      0.06 * (cloudCover - 0.5);
+      0.06 * (sunNorm - 0.5) +
+      0.05 * (tempNorm - 0.5) +
+      0.03 * (pressure - 0.5) +
+      0.02 * (cloudCover - 0.5);
     const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
+    const altitudeNorm = clamp((p.altitudeM + 300) / 3600);
 
     const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
     const cutoff =
-      cutoffBase * (1 - 0.22 * humidityNorm) * (0.52 + 0.76 * dayness);
+      cutoffBase * (1 - 0.22 * humidityNorm) * (0.52 + 0.76 * dayness) * (0.95 + 0.1 * altitudeNorm);
     const filterQ = 0.78 - 0.35 * humidityNorm;
     const noiseAmt =
       (0.01 +
@@ -216,7 +218,7 @@ export function useAudioEngine() {
       (0.03 + 0.48 * sunNorm + 0.45 * Math.pow(1 - y, 1.2)) *
       (0.64 + 0.64 * dayness);
     const lfoDepth =
-      (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion) *
+      (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion + 0.02 * altitudeNorm) *
       (0.66 + 0.72 * dayness);
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
@@ -224,27 +226,27 @@ export function useAudioEngine() {
 
     const now = ctx.currentTime;
 
-// 🌧️ rain droplets (random ticks)
-if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
-  const click = ctx.createOscillator();
-  const clickGain = ctx.createGain();
+    // 🌧️ rain droplets (random ticks)
+    if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
+      const click = ctx.createOscillator();
+      const clickGain = ctx.createGain();
 
-  click.type = "triangle";
-  click.frequency.value = 800 + Math.random() * 1200;
+      click.type = "triangle";
+      click.frequency.value = 800 + Math.random() * 1200;
 
-  clickGain.gain.value = 0.0001;
+      clickGain.gain.value = 0.0001;
 
-  click.connect(clickGain);
-  clickGain.connect(filterRef.current!);
+      click.connect(clickGain);
+      clickGain.connect(filterRef.current!);
 
-  const t = now;
-  clickGain.gain.setValueAtTime(0.0001, t);
-  clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
-  clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+      const t = now;
+      clickGain.gain.setValueAtTime(0.0001, t);
+      clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
 
-  click.start(t);
-  click.stop(t + 0.1);
-}
+      click.start(t);
+      click.stop(t + 0.1);
+    }
 
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
