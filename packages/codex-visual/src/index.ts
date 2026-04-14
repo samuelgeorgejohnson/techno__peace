@@ -1,5 +1,9 @@
 import type { HourlySignal, Ring } from "@technopeace/codex-data/src/types";
 
+export { applyPlaceBiasToBaseScene } from "./applyPlaceBiasToBaseScene";
+export type { BaseScene } from "./applyPlaceBiasToBaseScene";
+export { mapPlaceProfileToSceneBias } from "./mapPlaceProfileToSceneBias";
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export const sunArcHeight = (signal: HourlySignal): number => {
