@@ -265,7 +265,7 @@ export default function SkyInstrument({
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
-        touchAction: "none",
+        touchAction: mixerOpen ? "auto" : "none",
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
@@ -467,22 +467,24 @@ export default function SkyInstrument({
 
       {mixerOpen && activePage && (
         <div
-          onPointerDown={stopMixerEvent}
           style={{
             position: "absolute",
             inset: 0,
             zIndex: 2,
-            display: "grid",
-            placeItems: "center",
             padding: 24,
             background: "rgba(4, 6, 14, 0.48)",
             backdropFilter: "blur(14px)",
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+            maxHeight: "100vh",
           }}
         >
           <div
+            onPointerDown={stopMixerEvent}
             style={{
               width: "min(960px, 100%)",
-              minHeight: "min(620px, 100%)",
+              margin: "0 auto",
               borderRadius: 28,
               border: "1px solid rgba(255,255,255,0.12)",
               background:
@@ -491,6 +493,10 @@ export default function SkyInstrument({
               padding: 28,
               display: "grid",
               gap: 24,
+              maxHeight: "calc(100vh - 48px)",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
             }}
           >
             <div
