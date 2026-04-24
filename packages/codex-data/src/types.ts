@@ -28,3 +28,5 @@ export interface Modulation {
   shimmer?: number;
   warp?: number;
 }
+
+export * from "./types/ManMadeSignals";
