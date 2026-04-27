@@ -1,27 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-export type AudioParams = {
-  x: number;
-  y: number;
-  pressure: number;
-  latitude: number;
-  longitude: number;
-  altitudeM: number;
-  cloudCover: number;
-  windMps: number;
-  humidityPct: number;
-  sunAltitudeDeg: number;
-  isDay: boolean;
-  moonPhase: number;
-  temperatureC: number;
-
-  rainMm: number;
-  precipitationMm: number;
-  dailyRainMm: number;
-  showersMm: number;
-  sunLevel: number;
-  moonLevel: number;
-};
+import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 
 function clamp(x: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, x));
@@ -167,7 +145,7 @@ export function useAudioEngine() {
     setIsRunning(ctx.state === "running");
   }
 
-  function update(p: AudioParams) {
+  function update(p: AudioEngineSignalPayload) {
     const ctx = ctxRef.current;
     if (!ctx || !startedRef.current) return;
 

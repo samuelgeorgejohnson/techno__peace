@@ -1,30 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CurrentWeatherSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 import { useLocation } from "@technopeace/codex-map/src/useLocation";
-
-export type WeatherSignal = {
-  cloudCover: number;
-  windMps: number;
-  humidityPct: number;
-  sunAltitudeDeg: number;
-  moonPhase: number;
-  temperatureC: number;
-  isDay: boolean;
-  latitude: number;
-  longitude: number;
-  altitudeM: number;
-  rainMm: number;
-  precipitationMm: number;
-  dailyRainMm: number;
-  showersMm: number;
-  status: "idle" | "loading" | "live" | "fallback" | "error";
-};
 
 const FALLBACK_COORDS = {
   lat: 40.7128,
   lon: -74.006,
 };
 
-const DEFAULT_SIGNAL: WeatherSignal = {
+const DEFAULT_SIGNAL: CurrentWeatherSignalPayload = {
   cloudCover: 0.35,
   windMps: 3.2,
   humidityPct: 58,
@@ -77,7 +60,7 @@ function estimateSunAltitude(nowIso: string, sunriseIso?: string, sunsetIso?: st
 
 export function useCurrentWeatherSignal() {
   const { location, error: locationError } = useLocation();
-  const [signal, setSignal] = useState<WeatherSignal>(DEFAULT_SIGNAL);
+  const [signal, setSignal] = useState<CurrentWeatherSignalPayload>(DEFAULT_SIGNAL);
 
   const coords = useMemo(() => {
     if (location.lat !== 0 || location.lon !== 0) {
