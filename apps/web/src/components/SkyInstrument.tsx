@@ -209,13 +209,14 @@ export default function SkyInstrument({
       showersMm: 0,
       sunLevel: celestialMix.sun ?? 1,
       moonLevel: celestialMix.moon ?? 1,
+      air: manMadeAir.air,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [celestialMix.moon, celestialMix.sun, effectiveHumidity, effectiveRain, effectiveWind, isRunning, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [celestialMix.moon, celestialMix.sun, effectiveHumidity, effectiveRain, effectiveWind, isRunning, manMadeAir.air, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(
     () => () => {

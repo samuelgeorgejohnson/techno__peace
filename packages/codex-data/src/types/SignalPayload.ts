@@ -1,4 +1,5 @@
 import type { CelestialMixerState } from "./CelestialSignals";
+import type { AirSignal } from "./ManMadeSignals";
 import type { ManMadeSignals } from "./ManMadeSignals";
 
 export type SignalStatus = "idle" | "loading" | "live" | "fallback" | "error";
@@ -33,6 +34,7 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   pressure: number;
   sunLevel: number;
   moonLevel: number;
+  air?: AirSignal | null;
 };
 
 /**
