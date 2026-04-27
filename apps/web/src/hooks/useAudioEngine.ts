@@ -34,13 +34,23 @@ export function useAudioEngine() {
   const oscRef = useRef<OscillatorNode | null>(null);
   const subRef = useRef<OscillatorNode | null>(null);
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
+  const airNoiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
+  const airToneRef = useRef<OscillatorNode | null>(null);
 
   const filterRef = useRef<BiquadFilterNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
   const noiseGainRef = useRef<GainNode | null>(null);
+  const airNoiseFilterRef = useRef<BiquadFilterNode | null>(null);
+  const airNoiseGainRef = useRef<GainNode | null>(null);
+  const airToneFilterRef = useRef<BiquadFilterNode | null>(null);
+  const airToneGainRef = useRef<GainNode | null>(null);
+  const airPannerRef = useRef<StereoPannerNode | null>(null);
+  const airBusGainRef = useRef<GainNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
+  const airShimmerLfoRef = useRef<OscillatorNode | null>(null);
+  const airShimmerGainRef = useRef<GainNode | null>(null);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -50,11 +60,21 @@ export function useAudioEngine() {
     oscRef.current = null;
     subRef.current = null;
     noiseSrcRef.current = null;
+    airNoiseSrcRef.current = null;
+    airToneRef.current = null;
     filterRef.current = null;
     gainRef.current = null;
     noiseGainRef.current = null;
+    airNoiseFilterRef.current = null;
+    airNoiseGainRef.current = null;
+    airToneFilterRef.current = null;
+    airToneGainRef.current = null;
+    airPannerRef.current = null;
+    airBusGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
+    airShimmerLfoRef.current = null;
+    airShimmerGainRef.current = null;
     startedRef.current = false;
   }
 
@@ -110,10 +130,46 @@ export function useAudioEngine() {
     noiseSrc.buffer = buffer;
     noiseSrc.loop = true;
     noiseSrcRef.current = noiseSrc;
+    const airNoiseSrc = ctx.createBufferSource();
+    airNoiseSrc.buffer = buffer;
+    airNoiseSrc.loop = true;
+    airNoiseSrcRef.current = airNoiseSrc;
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = 0.0;
     noiseGainRef.current = noiseGain;
+    const airNoiseFilter = ctx.createBiquadFilter();
+    airNoiseFilter.type = "bandpass";
+    airNoiseFilter.frequency.value = 1000;
+    airNoiseFilter.Q.value = 1.4;
+    airNoiseFilterRef.current = airNoiseFilter;
+
+    const airNoiseGain = ctx.createGain();
+    airNoiseGain.gain.value = 0.0;
+    airNoiseGainRef.current = airNoiseGain;
+
+    const airTone = ctx.createOscillator();
+    airTone.type = "triangle";
+    airTone.frequency.value = 440;
+    airToneRef.current = airTone;
+
+    const airToneFilter = ctx.createBiquadFilter();
+    airToneFilter.type = "bandpass";
+    airToneFilter.frequency.value = 1100;
+    airToneFilter.Q.value = 4.6;
+    airToneFilterRef.current = airToneFilter;
+
+    const airToneGain = ctx.createGain();
+    airToneGain.gain.value = 0.0;
+    airToneGainRef.current = airToneGain;
+
+    const airPanner = ctx.createStereoPanner();
+    airPanner.pan.value = 0;
+    airPannerRef.current = airPanner;
+
+    const airBusGain = ctx.createGain();
+    airBusGain.gain.value = 0.0;
+    airBusGainRef.current = airBusGain;
 
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
@@ -123,23 +179,46 @@ export function useAudioEngine() {
     const lfoGain = ctx.createGain();
     lfoGain.gain.value = 0.0;
     lfoGainRef.current = lfoGain;
+    const airShimmerLfo = ctx.createOscillator();
+    airShimmerLfo.type = "sine";
+    airShimmerLfo.frequency.value = 0.2;
+    airShimmerLfoRef.current = airShimmerLfo;
+
+    const airShimmerGain = ctx.createGain();
+    airShimmerGain.gain.value = 0.0;
+    airShimmerGainRef.current = airShimmerGain;
 
     osc.connect(filter);
     sub.connect(filter);
 
     noiseSrc.connect(noiseGain);
     noiseGain.connect(filter);
+    airNoiseSrc.connect(airNoiseFilter);
+    airNoiseFilter.connect(airNoiseGain);
+    airNoiseGain.connect(airPanner);
+
+    airTone.connect(airToneFilter);
+    airToneFilter.connect(airToneGain);
+    airToneGain.connect(airPanner);
+
+    airPanner.connect(airBusGain);
+    airBusGain.connect(gain);
 
     filter.connect(gain);
     gain.connect(ctx.destination);
 
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
+    airShimmerLfo.connect(airShimmerGain);
+    airShimmerGain.connect(airToneFilter.frequency);
 
     osc.start();
     sub.start();
     noiseSrc.start();
+    airNoiseSrc.start();
+    airTone.start();
     lfo.start();
+    airShimmerLfo.start();
 
     startedRef.current = true;
     setIsRunning(ctx.state === "running");
@@ -209,6 +288,38 @@ export function useAudioEngine() {
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
     const gainSmoothing = 0.03 + 0.045 * wetness;
+    const manMadeAir = p.air;
+    const airMix = clamp(p.airMix ?? 1);
+    const airPresenceNorm = clamp(
+      manMadeAir?.normalized.proximity ??
+        (manMadeAir?.nearestDistanceKm ? 1 / (1 + manMadeAir.nearestDistanceKm / 30) : 0),
+    );
+    const airMotionNorm = clamp(
+      manMadeAir?.normalized.motion ?? (manMadeAir?.avgVelocityMps ? manMadeAir.avgVelocityMps / 280 : 0),
+    );
+    const airBrightnessNorm = clamp(
+      manMadeAir?.normalized.brightness ??
+        (manMadeAir?.avgAltitudeM ? (manMadeAir.avgAltitudeM - 600) / 10800 : 0.25),
+    );
+    const airTensionNorm = clamp(
+      manMadeAir?.normalized.tension ?? (manMadeAir?.headingSpread ? manMadeAir.headingSpread / 180 : 0),
+    );
+    const hasDopplerRatio = Number.isFinite(manMadeAir?.dopplerRatio);
+    const dopplerPitchRatio = hasDopplerRatio
+      ? clamp(manMadeAir?.dopplerRatio ?? 1, 0.97, 1.03)
+      : clamp(Math.pow(2, clamp(manMadeAir?.dopplerCents ?? 0, -24, 24) / 1200), 0.97, 1.03);
+    const airActiveGate = manMadeAir ? 1 : 0;
+    const airPresence = airActiveGate * airPresenceNorm;
+    const airVoiceLevel = clamp(0.00004 + 0.022 * airPresence + 0.007 * airMotionNorm, 0, 0.032) * airMix;
+    const airNoiseLevel = clamp(airVoiceLevel * (0.45 + 0.85 * airMotionNorm), 0, 0.022);
+    const airToneLevel = clamp(airVoiceLevel * (0.2 + 0.85 * airPresence + 0.2 * airTensionNorm), 0, 0.016);
+    const airToneBase = baseHz * (3.15 + 0.85 * airBrightnessNorm);
+    const airToneHz = clamp(airToneBase * dopplerPitchRatio, 160, 1700);
+    const airNoiseBandHz = clamp(680 + 1700 * airBrightnessNorm + 260 * airMotionNorm, 500, 3300);
+    const airToneBandHz = clamp(airToneHz * (1.05 + 0.35 * airBrightnessNorm), 280, 3900);
+    const airShimmerRate = clamp(0.05 + 1.15 * airMotionNorm, 0.05, 1.3);
+    const airShimmerDepth = clamp(14 + 70 * airMotionNorm + 25 * airTensionNorm, 10, 85);
+    const airWidth = clamp((airTensionNorm - 0.5) * 1.15, -0.55, 0.55);
 
     const now = ctx.currentTime;
 
@@ -241,6 +352,17 @@ export function useAudioEngine() {
 
     noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
     gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
+    airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, gainSmoothing);
+    airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, gainSmoothing);
+    airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.08);
+    airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBandHz, now, toneSmoothing);
+    airNoiseFilterRef.current?.Q.setTargetAtTime(1.1 + 1.3 * airTensionNorm, now, toneSmoothing);
+    airToneFilterRef.current?.frequency.setTargetAtTime(airToneBandHz, now, toneSmoothing);
+    airToneFilterRef.current?.Q.setTargetAtTime(4.4 + 2.8 * airTensionNorm, now, toneSmoothing);
+    airToneRef.current?.frequency.setTargetAtTime(airToneHz, now, pitchSmoothing + 0.01);
+    airPannerRef.current?.pan.setTargetAtTime(airWidth, now, 0.08);
+    airShimmerLfoRef.current?.frequency.setTargetAtTime(airShimmerRate, now, 0.08);
+    airShimmerGainRef.current?.gain.setTargetAtTime(airShimmerDepth, now, 0.08);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
