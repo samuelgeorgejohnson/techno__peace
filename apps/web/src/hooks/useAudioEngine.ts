@@ -184,8 +184,8 @@ export function useAudioEngine() {
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
-    const sunLevel = clamp(p.sunLevel);
-    const moonLevel = clamp(p.moonLevel);
+    const sunLevel = clamp(p.sunLevel, 0, 2);
+    const moonLevel = clamp(p.moonLevel, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
 
