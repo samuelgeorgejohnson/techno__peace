@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Literal
@@ -11,7 +12,57 @@ app = FastAPI(title="TechnoPeace API")
 DEFAULT_AIR_RADIUS_KM = 80
 DEFAULT_AIR_TIMEOUT_MS = 8_000
 DEFAULT_AIR_LIMIT = 100
+MAX_AIR_RADIUS_KM = 400
+MIN_AIR_TIMEOUT_MS = 501
+MAX_AIR_TIMEOUT_MS = 20_000
+MAX_AIR_LIMIT = 500
 NODE_WORKER_PATH = Path(__file__).with_name("airTrafficSignalWorker.ts")
+
+
+def _resolve_bounded_int_env(
+    name: str,
+    default: int,
+    *,
+    minimum: int = 1,
+    maximum: int | None = None,
+) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+
+    try:
+        parsed = int(raw)
+    except ValueError:
+        return default
+
+    if parsed < minimum:
+        return default
+
+    if maximum is not None and parsed > maximum:
+        return maximum
+
+    return parsed
+
+
+def _build_air_runtime_overrides() -> dict[str, int]:
+    return {
+        "radiusKm": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_RADIUS_KM",
+            DEFAULT_AIR_RADIUS_KM,
+            maximum=MAX_AIR_RADIUS_KM,
+        ),
+        "timeoutMs": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_TIMEOUT_MS",
+            DEFAULT_AIR_TIMEOUT_MS,
+            minimum=MIN_AIR_TIMEOUT_MS,
+            maximum=MAX_AIR_TIMEOUT_MS,
+        ),
+        "limit": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_LIMIT",
+            DEFAULT_AIR_LIMIT,
+            maximum=MAX_AIR_LIMIT,
+        ),
+    }
 
 
 @app.get("/health")
@@ -23,24 +74,6 @@ def health():
 def signals(
     lat: float = Query(..., description="Latitude for signal lookup."),
     lon: float = Query(..., description="Longitude for signal lookup."),
-    radius_km: float = Query(
-        DEFAULT_AIR_RADIUS_KM,
-        gt=0,
-        le=400,
-        description="Search radius in kilometers for air traffic signal lookup.",
-    ),
-    timeout_ms: int = Query(
-        DEFAULT_AIR_TIMEOUT_MS,
-        gt=500,
-        le=20_000,
-        description="Air traffic provider timeout in milliseconds.",
-    ),
-    limit: int = Query(
-        DEFAULT_AIR_LIMIT,
-        gt=0,
-        le=500,
-        description="Optional provider-side aircraft row limit.",
-    ),
 ):
     """
     Server-owned signal endpoint.
@@ -48,12 +81,12 @@ def signals(
     Current scope (narrow): returns only the normalized man-made air signal,
     sourced through the typed @technopeace/codex-data adapter in a Node worker.
     """
+    air_runtime = _build_air_runtime_overrides()
+
     worker_payload = {
         "lat": lat,
         "lon": lon,
-        "radiusKm": radius_km,
-        "timeoutMs": timeout_ms,
-        "limit": limit,
+        **air_runtime,
     }
 
     air = None
@@ -95,11 +128,7 @@ def signals(
         },
         "meta": {
             "airStatus": air_status,
-            "airConfig": {
-                "radiusKm": radius_km,
-                "timeoutMs": timeout_ms,
-                "limit": limit,
-            },
+            "airConfig": air_runtime,
         },
     }
 
