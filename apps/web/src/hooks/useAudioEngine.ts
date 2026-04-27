@@ -305,21 +305,26 @@ export function useAudioEngine() {
       manMadeAir?.normalized.tension ?? (manMadeAir?.headingSpread ? manMadeAir.headingSpread / 180 : 0),
     );
     const hasDopplerRatio = Number.isFinite(manMadeAir?.dopplerRatio);
-    const dopplerPitchRatio = hasDopplerRatio
-      ? clamp(manMadeAir?.dopplerRatio ?? 1, 0.97, 1.03)
-      : clamp(Math.pow(2, clamp(manMadeAir?.dopplerCents ?? 0, -24, 24) / 1200), 0.97, 1.03);
+    const rawDopplerPitchRatio = hasDopplerRatio
+      ? clamp(manMadeAir?.dopplerRatio ?? 1, 0.985, 1.015)
+      : clamp(Math.pow(2, clamp(manMadeAir?.dopplerCents ?? 0, -12, 12) / 1200), 0.985, 1.015);
     const airActiveGate = manMadeAir ? 1 : 0;
     const airPresence = airActiveGate * airPresenceNorm;
-    const airVoiceLevel = clamp(0.00004 + 0.022 * airPresence + 0.007 * airMotionNorm, 0, 0.032) * airMix;
-    const airNoiseLevel = clamp(airVoiceLevel * (0.45 + 0.85 * airMotionNorm), 0, 0.022);
-    const airToneLevel = clamp(airVoiceLevel * (0.2 + 0.85 * airPresence + 0.2 * airTensionNorm), 0, 0.016);
+    const dopplerInfluence = 0.25 + 0.35 * airPresence;
+    const dopplerPitchRatio = 1 + (rawDopplerPitchRatio - 1) * dopplerInfluence;
+    const airVoiceLevel = clamp(0.00002 + 0.012 * airPresence + 0.004 * airMotionNorm, 0, 0.018) * airMix;
+    const airNoiseLevel = clamp(airVoiceLevel * (0.38 + 0.55 * airMotionNorm), 0, 0.011);
+    const airToneLevel = clamp(airVoiceLevel * (0.16 + 0.52 * airPresence + 0.18 * airTensionNorm), 0, 0.008);
     const airToneBase = baseHz * (3.15 + 0.85 * airBrightnessNorm);
     const airToneHz = clamp(airToneBase * dopplerPitchRatio, 160, 1700);
     const airNoiseBandHz = clamp(680 + 1700 * airBrightnessNorm + 260 * airMotionNorm, 500, 3300);
     const airToneBandHz = clamp(airToneHz * (1.05 + 0.35 * airBrightnessNorm), 280, 3900);
-    const airShimmerRate = clamp(0.05 + 1.15 * airMotionNorm, 0.05, 1.3);
-    const airShimmerDepth = clamp(14 + 70 * airMotionNorm + 25 * airTensionNorm, 10, 85);
+    const airShimmerRate = clamp(0.05 + 0.65 * airMotionNorm, 0.05, 0.8);
+    const airShimmerDepth = clamp(8 + 38 * airMotionNorm + 12 * airTensionNorm, 6, 45);
     const airWidth = clamp((airTensionNorm - 0.5) * 1.15, -0.55, 0.55);
+    const airPitchSmoothing = 0.08 + 0.09 * diffusion;
+    const airToneSmoothing = 0.09 + 0.11 * diffusion;
+    const airGainSmoothing = 0.12 + 0.08 * wetness;
 
     const now = ctx.currentTime;
 
@@ -352,17 +357,17 @@ export function useAudioEngine() {
 
     noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
     gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
-    airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, gainSmoothing);
-    airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, gainSmoothing);
-    airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.08);
-    airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBandHz, now, toneSmoothing);
-    airNoiseFilterRef.current?.Q.setTargetAtTime(1.1 + 1.3 * airTensionNorm, now, toneSmoothing);
-    airToneFilterRef.current?.frequency.setTargetAtTime(airToneBandHz, now, toneSmoothing);
-    airToneFilterRef.current?.Q.setTargetAtTime(4.4 + 2.8 * airTensionNorm, now, toneSmoothing);
-    airToneRef.current?.frequency.setTargetAtTime(airToneHz, now, pitchSmoothing + 0.01);
-    airPannerRef.current?.pan.setTargetAtTime(airWidth, now, 0.08);
-    airShimmerLfoRef.current?.frequency.setTargetAtTime(airShimmerRate, now, 0.08);
-    airShimmerGainRef.current?.gain.setTargetAtTime(airShimmerDepth, now, 0.08);
+    airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, airGainSmoothing);
+    airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, airGainSmoothing);
+    airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.16);
+    airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBandHz, now, airToneSmoothing);
+    airNoiseFilterRef.current?.Q.setTargetAtTime(0.95 + 0.9 * airTensionNorm, now, airToneSmoothing);
+    airToneFilterRef.current?.frequency.setTargetAtTime(airToneBandHz, now, airToneSmoothing);
+    airToneFilterRef.current?.Q.setTargetAtTime(3.2 + 1.5 * airTensionNorm, now, airToneSmoothing);
+    airToneRef.current?.frequency.setTargetAtTime(airToneHz, now, airPitchSmoothing);
+    airPannerRef.current?.pan.setTargetAtTime(airWidth, now, 0.16);
+    airShimmerLfoRef.current?.frequency.setTargetAtTime(airShimmerRate, now, 0.16);
+    airShimmerGainRef.current?.gain.setTargetAtTime(airShimmerDepth, now, 0.16);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
