@@ -99,6 +99,7 @@ export default function SkyInstrument({
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
+  const [isCompactHud, setIsCompactHud] = useState(false);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
@@ -223,6 +224,22 @@ export default function SkyInstrument({
     [],
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 768px)");
+    const applyMode = (matches: boolean) => {
+      setIsCompactHud(matches);
+    };
+
+    applyMode(media.matches);
+    const onChange = (event: MediaQueryListEvent) => {
+      applyMode(event.matches);
+    };
+
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
   function getXY(e: React.PointerEvent) {
     const el = elRef.current;
     if (!el) return { x: 0.5, y: 0.5 };
@@ -302,7 +319,7 @@ export default function SkyInstrument({
     update(audioParams({ ...pt, pressure: dronePressure }));
   }
 
-  function stopMixerEvent(e: React.PointerEvent | React.MouseEvent) {
+  function stopMixerEvent(e: React.SyntheticEvent) {
     e.stopPropagation();
   }
 
@@ -450,12 +467,16 @@ export default function SkyInstrument({
 
       <div
         onPointerDown={stopMixerEvent}
+        onPointerMove={stopMixerEvent}
+        onPointerUp={stopMixerEvent}
+        onPointerCancel={stopMixerEvent}
+        onClick={stopMixerEvent}
         style={{
           position: "absolute",
           top: 16,
           left: 16,
-          zIndex: 3,
-          padding: 12,
+          zIndex: mixerOpen ? 4 : 6,
+          padding: isCompactHud ? 8 : 12,
           borderRadius: 14,
           background: "rgba(0,0,0,0.35)",
           border: "1px solid rgba(255,255,255,0.08)",
@@ -465,13 +486,41 @@ export default function SkyInstrument({
           backdropFilter: "blur(10px)",
           display: "grid",
           gap: 8,
-          minWidth: 220,
+          minWidth: isCompactHud ? 0 : 220,
+          maxWidth: isCompactHud ? 148 : undefined,
         }}
       >
-        <div style={{ letterSpacing: "0.06em", fontWeight: 700 }}>GEOLOCATION + MIXER</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <div style={{ letterSpacing: "0.06em", fontWeight: 700, fontSize: isCompactHud ? 10 : 12 }}>
+            GEOLOCATION + MIXER
+          </div>
+          <button
+            type="button"
+            onPointerDown={stopMixerEvent}
+            onPointerUp={stopMixerEvent}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsCompactHud((prev) => !prev);
+            }}
+            aria-label={isCompactHud ? "Expand HUD" : "Collapse HUD"}
+            style={{
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "rgba(255,255,255,0.08)",
+              color: "white",
+              padding: "4px 8px",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            {isCompactHud ? "Expand" : "Minimize"}
+          </button>
+        </div>
         <button
           type="button"
           onPointerDown={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
           onClick={(e) => {
             e.stopPropagation();
             setMixerOpen((open) => !open);
@@ -493,7 +542,7 @@ export default function SkyInstrument({
           <FadersIcon />
           <span
             style={{
-              fontSize: 12,
+              fontSize: isCompactHud ? 11 : 12,
               fontWeight: 700,
               letterSpacing: "0.16em",
               textTransform: "uppercase",
@@ -502,40 +551,45 @@ export default function SkyInstrument({
             Mixer
           </span>
         </button>
-        <div style={{ opacity: 0.9 }}>{locationText}</div>
-        <button
-          type="button"
-          onPointerDown={stopMixerEvent}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestLocation();
-          }}
-          disabled={isRequestingLocation}
-          style={{
-            borderRadius: 10,
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(255,255,255,0.08)",
-            color: "white",
-            padding: "8px 10px",
-            cursor: isRequestingLocation ? "wait" : "pointer",
-          }}
-        >
-          {isRequestingLocation ? "Requesting..." : "Request location"}
-        </button>
-        <div>audio: {isRunning ? "on" : "off"}</div>
-        <div>
-          lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
-        </div>
-        <div>weather: {weather.status}</div>
-        <div>F₀ base: {placeBaseHz.toFixed(1)} Hz</div>
-        <div>tonic now: {currentTonicHz.toFixed(1)} Hz</div>
-        <div>wind raw/effective: {Math.round(rawWind * 100)}% / {Math.round(effectiveWind * 100)}%</div>
-        <div>rain raw/effective: {Math.round(rawRain * 100)}% / {Math.round(effectiveRain * 100)}%</div>
-        <div>
-          humidity raw/effective: {Math.round(rawHumidity * 100)}% / {Math.round(effectiveHumidity * 100)}%
-        </div>
-        <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
-        <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
+        {!isCompactHud && (
+          <>
+            <div style={{ opacity: 0.9 }}>{locationText}</div>
+            <button
+              type="button"
+              onPointerDown={stopMixerEvent}
+              onPointerUp={stopMixerEvent}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestLocation();
+              }}
+              disabled={isRequestingLocation}
+              style={{
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+                color: "white",
+                padding: "8px 10px",
+                cursor: isRequestingLocation ? "wait" : "pointer",
+              }}
+            >
+              {isRequestingLocation ? "Requesting..." : "Request location"}
+            </button>
+            <div>audio: {isRunning ? "on" : "off"}</div>
+            <div>
+              lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
+            </div>
+            <div>weather: {weather.status}</div>
+            <div>F₀ base: {placeBaseHz.toFixed(1)} Hz</div>
+            <div>tonic now: {currentTonicHz.toFixed(1)} Hz</div>
+            <div>wind raw/effective: {Math.round(rawWind * 100)}% / {Math.round(effectiveWind * 100)}%</div>
+            <div>rain raw/effective: {Math.round(rawRain * 100)}% / {Math.round(effectiveRain * 100)}%</div>
+            <div>
+              humidity raw/effective: {Math.round(rawHumidity * 100)}% / {Math.round(effectiveHumidity * 100)}%
+            </div>
+            <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
+            <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
+          </>
+        )}
       </div>
 
       <div
@@ -559,10 +613,15 @@ export default function SkyInstrument({
 
       {mixerOpen && activePage && (
         <div
+          onPointerDown={stopMixerEvent}
+          onPointerMove={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onPointerCancel={stopMixerEvent}
+          onClick={stopMixerEvent}
           style={{
             position: "absolute",
             inset: 0,
-            zIndex: 2,
+            zIndex: 5,
             padding: 24,
             background: "rgba(4, 6, 14, 0.48)",
             backdropFilter: "blur(14px)",
@@ -640,6 +699,7 @@ export default function SkyInstrument({
                       key={page.id}
                       type="button"
                       onPointerDown={stopMixerEvent}
+                      onPointerUp={stopMixerEvent}
                       onClick={(e) => {
                         e.stopPropagation();
                         setActivePageId(page.id);
@@ -723,6 +783,8 @@ export default function SkyInstrument({
                     max={200}
                     value={mixLevels[channel.id] ?? 100}
                     onPointerDown={stopMixerEvent}
+                    onPointerUp={stopMixerEvent}
+                    onClick={stopMixerEvent}
                     onChange={(e) =>
                       updateChannelLevel(channel.id, Number(e.currentTarget.value))
                     }
