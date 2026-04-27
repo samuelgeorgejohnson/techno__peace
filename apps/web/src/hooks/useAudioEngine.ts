@@ -19,6 +19,8 @@ export type AudioParams = {
   precipitationMm: number;
   dailyRainMm: number;
   showersMm: number;
+  sunLevel: number;
+  moonLevel: number;
 };
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -182,6 +184,8 @@ export function useAudioEngine() {
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
+    const sunLevel = clamp(p.sunLevel, 0, 2);
+    const moonLevel = clamp(p.moonLevel, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
 
@@ -215,10 +219,14 @@ export function useAudioEngine() {
       (0.82 + 0.32 * dayness);
 
     const lfoRate =
-      (0.03 + 0.48 * sunNorm + 0.45 * Math.pow(1 - y, 1.2)) *
+      (0.03 + 0.48 * sunNorm * (0.65 + 0.35 * sunLevel) + 0.45 * Math.pow(1 - y, 1.2)) *
       (0.64 + 0.64 * dayness);
     const lfoDepth =
-      (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion + 0.02 * altitudeNorm) *
+      (0.016 +
+        0.13 * moonPhase * (0.65 + 0.35 * moonLevel) +
+        0.05 * pressure +
+        0.028 * diffusion +
+        0.02 * altitudeNorm) *
       (0.66 + 0.72 * dayness);
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
