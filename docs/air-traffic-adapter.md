@@ -9,14 +9,17 @@ This repository includes a typed air-traffic adapter in `@technopeace/codex-data
 
 ## Server Runtime Environment Variables
 
-The server-side worker reads these values via `resolveAirTrafficRuntimeConfig()` from `process.env`:
+The server-owned `/signals` path now sets adapter runtime entirely on the server:
 
-- `AIR_TRAFFIC_API_URL` (**required**)  
-  Base endpoint used by `URL(...)`. Example: `https://api.your-provider.com/v1/air-traffic`
-- `AIR_TRAFFIC_API_KEY` (optional, provider-dependent)  
-  Used as a Bearer token in the default request.
+- Worker (`apps/api/airTrafficSignalWorker.ts`) resolves provider config via `resolveAirTrafficRuntimeConfig()` from `process.env`:
+  - `AIR_TRAFFIC_API_URL` (**required**)
+  - `AIR_TRAFFIC_API_KEY` (optional, provider-dependent)
+- API layer (`apps/api/main.py`) sets request defaults before calling worker:
+  - `AIR_TRAFFIC_RADIUS_KM` (optional, defaults to `80`)
+  - `AIR_TRAFFIC_TIMEOUT_MS` (optional, defaults to `8000`)
+  - `AIR_TRAFFIC_LIMIT` (optional, defaults to `100`)
 
-These are not exposed to browser code; they are consumed only by the API's server-owned worker path.
+No browser-facing code receives provider credentials, and there is no direct browser fetch to the air-traffic provider.
 
 ## `/signals` Response Shape (current narrow scope)
 
@@ -56,7 +59,7 @@ Current server scope returns only the first man-made source channel (`manMade.ai
 }
 ```
 
-When config is missing or provider calls fail, `manMade.air` is `null`, `meta.airStatus` is `"unavailable"`, and `meta.airError` is populated.
+When config is missing or provider calls fail, `manMade.air` is `null`, `meta.airStatus` is `"unavailable"`, and `meta.airError` is populated. `meta.airConfig` still reports the server-side radius/timeout/limit used for the attempted fetch.
 
 ## Failure Behavior (explicit, no fake success)
 
