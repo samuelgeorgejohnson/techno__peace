@@ -32,3 +32,5 @@ export interface Modulation {
 export * from "./types/ManMadeSignals";
 export * from "./types/CelestialSignals";
 export * from "./types/SignalPayload";
+
+export * from "./adapters/airTraffic";
