@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="TechnoPeace dove logo">
+  <g stroke="#F5F8FF" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M127 154l121 83c18 12 42 8 55-10l23-31c23-31 66-43 101-28 25 11 44 32 53 58l-43 8c-19 4-33 20-33 40v32c0 76-62 138-138 138h-52"/>
+    <path d="M122 212l114 71h101"/>
+    <path d="M110 286l58 34h182"/>
+    <path d="M212 348l-72 69"/>
+    <path d="M264 352l-78 84"/>
+    <path d="M296 364l-64 67"/>
+    <path d="M170 348l-71 23"/>
+    <path d="M170 348l-47 50"/>
+  </g>
+  <g fill="#F5F8FF">
+    <circle cx="129" cy="154" r="11"/>
+    <circle cx="123" cy="212" r="11"/>
+    <circle cx="110" cy="286" r="11"/>
+    <circle cx="99" cy="371" r="11"/>
+    <circle cx="123" cy="398" r="11"/>
+    <circle cx="140" cy="417" r="11"/>
+    <circle cx="186" cy="436" r="11"/>
+    <circle cx="232" cy="431" r="11"/>
+    <circle cx="337" cy="229" r="10"/>
+    <circle cx="286" cy="336" r="11"/>
+    <circle cx="347" cy="306" r="11"/>
+  </g>
+</svg>

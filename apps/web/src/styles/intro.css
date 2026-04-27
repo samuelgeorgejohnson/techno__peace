@@ -171,11 +171,11 @@ body {
 }
 
 .tp-logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #4de1ff, #c084fc);
-  box-shadow: 0 0 24px rgba(77, 225, 255, 0.4);
+  width: clamp(36px, 8vw, 48px);
+  height: auto;
+  object-fit: contain;
+  opacity: 0.95;
+  filter: drop-shadow(0 0 14px rgba(77, 225, 255, 0.35));
 }
 
 /* Onboarding */
