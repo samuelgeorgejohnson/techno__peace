@@ -61,7 +61,7 @@ const SplashIntro = ({ onComplete, sky }: SplashIntroProps) => {
         <div className={`tp-ripple ripple-2 ${phase === "ripples" || phase === "dove" ? "show" : ""}`} />
         <div className={`tp-ripple ripple-3 ${phase === "dove" || phase === "dock" || phase === "done" ? "show" : ""}`} />
         <div className={`tp-wordmark ${phase === "dove" || phase === "dock" || phase === "done" ? "show" : ""}`}>
-          <div className="tp-logo" aria-hidden />
+          <img src="/assets/logo/technopeace-dove.svg" alt="" className="tp-logo" aria-hidden="true" />
           <div>
             <p className="tp-eyebrow">{skyLabel}</p>
             <h1>TechnoPeace</h1>
