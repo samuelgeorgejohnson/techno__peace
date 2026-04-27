@@ -12,26 +12,56 @@ app = FastAPI(title="TechnoPeace API")
 DEFAULT_AIR_RADIUS_KM = 80
 DEFAULT_AIR_TIMEOUT_MS = 8_000
 DEFAULT_AIR_LIMIT = 100
+MAX_AIR_RADIUS_KM = 400
+MIN_AIR_TIMEOUT_MS = 501
+MAX_AIR_TIMEOUT_MS = 20_000
+MAX_AIR_LIMIT = 500
 NODE_WORKER_PATH = Path(__file__).with_name("airTrafficSignalWorker.ts")
 
 
-def _resolve_int_env(name: str, default: int) -> int:
+def _resolve_bounded_int_env(
+    name: str,
+    default: int,
+    *,
+    minimum: int = 1,
+    maximum: int | None = None,
+) -> int:
     raw = os.environ.get(name)
     if raw is None:
         return default
 
     try:
         parsed = int(raw)
-        return parsed if parsed > 0 else default
     except ValueError:
         return default
+
+    if parsed < minimum:
+        return default
+
+    if maximum is not None and parsed > maximum:
+        return maximum
+
+    return parsed
 
 
 def _build_air_runtime_overrides() -> dict[str, int]:
     return {
-        "radiusKm": _resolve_int_env("AIR_TRAFFIC_RADIUS_KM", DEFAULT_AIR_RADIUS_KM),
-        "timeoutMs": _resolve_int_env("AIR_TRAFFIC_TIMEOUT_MS", DEFAULT_AIR_TIMEOUT_MS),
-        "limit": _resolve_int_env("AIR_TRAFFIC_LIMIT", DEFAULT_AIR_LIMIT),
+        "radiusKm": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_RADIUS_KM",
+            DEFAULT_AIR_RADIUS_KM,
+            maximum=MAX_AIR_RADIUS_KM,
+        ),
+        "timeoutMs": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_TIMEOUT_MS",
+            DEFAULT_AIR_TIMEOUT_MS,
+            minimum=MIN_AIR_TIMEOUT_MS,
+            maximum=MAX_AIR_TIMEOUT_MS,
+        ),
+        "limit": _resolve_bounded_int_env(
+            "AIR_TRAFFIC_LIMIT",
+            DEFAULT_AIR_LIMIT,
+            maximum=MAX_AIR_LIMIT,
+        ),
     }
 
 

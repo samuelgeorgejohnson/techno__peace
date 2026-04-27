@@ -15,9 +15,9 @@ The server-owned `/signals` path now sets adapter runtime entirely on the server
   - `AIR_TRAFFIC_API_URL` (**required**)
   - `AIR_TRAFFIC_API_KEY` (optional, provider-dependent)
 - API layer (`apps/api/main.py`) sets request defaults before calling worker:
-  - `AIR_TRAFFIC_RADIUS_KM` (optional, defaults to `80`)
-  - `AIR_TRAFFIC_TIMEOUT_MS` (optional, defaults to `8000`)
-  - `AIR_TRAFFIC_LIMIT` (optional, defaults to `100`)
+  - `AIR_TRAFFIC_RADIUS_KM` (optional, defaults to `80`, capped at `400`)
+  - `AIR_TRAFFIC_TIMEOUT_MS` (optional, defaults to `8000`, valid range `501..20000`, capped at `20000`)
+  - `AIR_TRAFFIC_LIMIT` (optional, defaults to `100`, capped at `500`)
 
 No browser-facing code receives provider credentials, and there is no direct browser fetch to the air-traffic provider.
 
@@ -59,7 +59,7 @@ Current server scope returns only the first man-made source channel (`manMade.ai
 }
 ```
 
-When config is missing or provider calls fail, `manMade.air` is `null`, `meta.airStatus` is `"unavailable"`, and `meta.airError` is populated. `meta.airConfig` still reports the server-side radius/timeout/limit used for the attempted fetch.
+When config is missing or provider calls fail, `manMade.air` is `null`, `meta.airStatus` is `"unavailable"`, and `meta.airError` is populated. `meta.airConfig` still reports the bounded server-side radius/timeout/limit used for the attempted fetch.
 
 ## Failure Behavior (explicit, no fake success)
 
