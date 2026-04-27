@@ -289,6 +289,7 @@ export function useAudioEngine() {
     const toneSmoothing = 0.02 + 0.055 * diffusion;
     const gainSmoothing = 0.03 + 0.045 * wetness;
     const manMadeAir = p.air;
+    const airMix = clamp(p.airMix ?? 1);
     const airPresenceNorm = clamp(
       manMadeAir?.normalized.proximity ??
         (manMadeAir?.nearestDistanceKm ? 1 / (1 + manMadeAir.nearestDistanceKm / 30) : 0),
@@ -303,12 +304,13 @@ export function useAudioEngine() {
     const airTensionNorm = clamp(
       manMadeAir?.normalized.tension ?? (manMadeAir?.headingSpread ? manMadeAir.headingSpread / 180 : 0),
     );
-    const dopplerRatio = clamp(manMadeAir?.dopplerRatio ?? 1, 0.94, 1.06);
-    const dopplerCents = clamp(manMadeAir?.dopplerCents ?? 0, -30, 30);
-    const dopplerPitchRatio = clamp(dopplerRatio * Math.pow(2, dopplerCents / 1200), 0.95, 1.05);
+    const hasDopplerRatio = Number.isFinite(manMadeAir?.dopplerRatio);
+    const dopplerPitchRatio = hasDopplerRatio
+      ? clamp(manMadeAir?.dopplerRatio ?? 1, 0.97, 1.03)
+      : clamp(Math.pow(2, clamp(manMadeAir?.dopplerCents ?? 0, -24, 24) / 1200), 0.97, 1.03);
     const airActiveGate = manMadeAir ? 1 : 0;
     const airPresence = airActiveGate * airPresenceNorm;
-    const airVoiceLevel = clamp(0.00004 + 0.022 * airPresence + 0.007 * airMotionNorm, 0, 0.032);
+    const airVoiceLevel = clamp(0.00004 + 0.022 * airPresence + 0.007 * airMotionNorm, 0, 0.032) * airMix;
     const airNoiseLevel = clamp(airVoiceLevel * (0.45 + 0.85 * airMotionNorm), 0, 0.022);
     const airToneLevel = clamp(airVoiceLevel * (0.2 + 0.85 * airPresence + 0.2 * airTensionNorm), 0, 0.016);
     const airToneBase = baseHz * (3.15 + 0.85 * airBrightnessNorm);
@@ -352,7 +354,7 @@ export function useAudioEngine() {
     gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
     airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, gainSmoothing);
     airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, gainSmoothing);
-    airBusGainRef.current?.gain.setTargetAtTime(airActiveGate, now, 0.08);
+    airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.08);
     airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBandHz, now, toneSmoothing);
     airNoiseFilterRef.current?.Q.setTargetAtTime(1.1 + 1.3 * airTensionNorm, now, toneSmoothing);
     airToneFilterRef.current?.frequency.setTargetAtTime(airToneBandHz, now, toneSmoothing);
