@@ -48,6 +48,8 @@ export function useAudioEngine() {
   const airBusGainRef = useRef<GainNode | null>(null);
   const daylifeFilterRef = useRef<BiquadFilterNode | null>(null);
   const daylifeGainRef = useRef<GainNode | null>(null);
+  const chimeFilterRef = useRef<BiquadFilterNode | null>(null);
+  const chimeGainRef = useRef<GainNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
@@ -55,6 +57,8 @@ export function useAudioEngine() {
   const airShimmerGainRef = useRef<GainNode | null>(null);
   const daylifeActivityRef = useRef(0);
   const nextDaylifeEventRef = useRef(0);
+  const chimeActivityRef = useRef(0);
+  const nextChimeEventRef = useRef(0);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -77,12 +81,16 @@ export function useAudioEngine() {
     airBusGainRef.current = null;
     daylifeFilterRef.current = null;
     daylifeGainRef.current = null;
+    chimeFilterRef.current = null;
+    chimeGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
     airShimmerLfoRef.current = null;
     airShimmerGainRef.current = null;
     daylifeActivityRef.current = 0;
     nextDaylifeEventRef.current = 0;
+    chimeActivityRef.current = 0;
+    nextChimeEventRef.current = 0;
     startedRef.current = false;
   }
 
@@ -186,6 +194,14 @@ export function useAudioEngine() {
     const daylifeGain = ctx.createGain();
     daylifeGain.gain.value = 0.0;
     daylifeGainRef.current = daylifeGain;
+    const chimeFilter = ctx.createBiquadFilter();
+    chimeFilter.type = "bandpass";
+    chimeFilter.frequency.value = 2200;
+    chimeFilter.Q.value = 4.8;
+    chimeFilterRef.current = chimeFilter;
+    const chimeGain = ctx.createGain();
+    chimeGain.gain.value = 0.0;
+    chimeGainRef.current = chimeGain;
 
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
@@ -221,6 +237,8 @@ export function useAudioEngine() {
     airBusGain.connect(gain);
     daylifeFilter.connect(daylifeGain);
     daylifeGain.connect(gain);
+    chimeFilter.connect(chimeGain);
+    chimeGain.connect(gain);
 
     filter.connect(gain);
     gain.connect(ctx.destination);
@@ -259,6 +277,7 @@ export function useAudioEngine() {
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
+    const precipNorm = clamp((p.rainMm + p.showersMm + p.precipitationMm) / 8);
     const sunLevel = clamp(p.sunLevel, 0, 2);
     const moonLevel = clamp(p.moonLevel, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
@@ -353,6 +372,19 @@ export function useAudioEngine() {
     const daylifeDensityPerSec = clamp(0.02 + 0.55 * daylifeActivity, 0.015, 0.6);
     const daylifeGain = clamp(0.00002 + 0.0035 * daylifeActivity, 0.00002, 0.0038);
     const daylifeBrightness = clamp(1300 + 2100 * daylifeActivity + 250 * (1 - cloudCover), 1100, 3800);
+    const windModerate = clamp(1 - Math.abs(windNorm - 0.36) / 0.36);
+    const windExtremeSuppression = clamp(1 - Math.pow(clamp((windNorm - 0.7) / 0.3), 1.2));
+    const rainChimeSuppression = clamp(1 - 0.92 * Math.pow(precipNorm, 0.9));
+    const clearChimeLift = 0.78 + 0.42 * (1 - cloudCover);
+    const humiditySoftening = 0.88 + 0.12 * (1 - humidityNorm);
+    const chimeTarget =
+      clamp(windModerate * windExtremeSuppression * rainChimeSuppression * clearChimeLift * humiditySoftening, 0, 1) *
+      0.8;
+    chimeActivityRef.current += (chimeTarget - chimeActivityRef.current) * 0.11;
+    const chimeActivity = clamp(chimeActivityRef.current);
+    const chimeDensityPerSec = clamp(0.008 + 0.2 * chimeActivity, 0.008, 0.22);
+    const chimeBrightness = clamp(1700 + 2200 * (1 - cloudCover) + 500 * (1 - precipNorm), 1500, 4200);
+    const chimeOutput = clamp(0.00001 + 0.0011 * chimeActivity * rainChimeSuppression, 0.00001, 0.0011);
 
     const now = ctx.currentTime;
 
@@ -402,6 +434,37 @@ export function useAudioEngine() {
       nextDaylifeEventRef.current = now + intervalBase * (0.9 + Math.random() * 0.55);
     }
 
+    if (now >= nextChimeEventRef.current && chimeActivity > 0.02 && chimeFilterRef.current) {
+      const triggerProb = chimeDensityPerSec * 0.35;
+      if (Math.random() < triggerProb) {
+        const chimeBase = clamp(
+          720 + 440 * windNorm + 340 * (1 - cloudCover) + (Math.random() - 0.5) * 240,
+          620,
+          1800,
+        );
+        const ratios = [1, 2.73, 4.11];
+        const hitAmp = chimeOutput * (0.6 + Math.random() * 0.65);
+        ratios.forEach((ratio, i) => {
+          const partial = ctx.createOscillator();
+          const partialGain = ctx.createGain();
+          partial.type = "sine";
+          partial.frequency.setValueAtTime(chimeBase * ratio, now);
+          const onset = 0.003 + i * 0.0015;
+          const decay = 0.18 + i * 0.18 + Math.random() * 0.28;
+          const partialAmp = hitAmp * (i === 0 ? 1 : i === 1 ? 0.45 : 0.24);
+          partialGain.gain.setValueAtTime(0.000001, now);
+          partialGain.gain.exponentialRampToValueAtTime(partialAmp, now + onset);
+          partialGain.gain.exponentialRampToValueAtTime(0.000001, now + onset + decay);
+          partial.connect(partialGain);
+          partialGain.connect(chimeFilterRef.current!);
+          partial.start(now);
+          partial.stop(now + onset + decay + 0.02);
+        });
+      }
+      const intervalBase = 1.4 + (1 - chimeActivity) * 5.4;
+      nextChimeEventRef.current = now + intervalBase * (0.85 + Math.random() * 0.45);
+    }
+
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
     filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
@@ -423,6 +486,9 @@ export function useAudioEngine() {
     daylifeFilterRef.current?.frequency.setTargetAtTime(daylifeBrightness, now, 0.2);
     daylifeFilterRef.current?.Q.setTargetAtTime(1.9 + 1.2 * daylifeActivity, now, 0.2);
     daylifeGainRef.current?.gain.setTargetAtTime(daylifeGain, now, 0.22);
+    chimeFilterRef.current?.frequency.setTargetAtTime(chimeBrightness, now, 0.24);
+    chimeFilterRef.current?.Q.setTargetAtTime(4.2 + 1.7 * (1 - precipNorm), now, 0.24);
+    chimeGainRef.current?.gain.setTargetAtTime(chimeOutput, now, 0.26);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
