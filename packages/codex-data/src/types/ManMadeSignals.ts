@@ -25,6 +25,10 @@ export interface AirSignal {
   avgAltitudeM?: number;
   avgVelocityMps?: number;
   headingSpread?: number;
+  radialVelocityMps?: number;
+  dopplerRatio?: number;
+  dopplerCents?: number;
+  nearestApproachBias?: number;
   normalized: ManMadeSignalLayer;
 }
 
