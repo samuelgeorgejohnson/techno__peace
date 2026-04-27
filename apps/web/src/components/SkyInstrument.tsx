@@ -4,6 +4,7 @@ import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSig
 import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
+import { useManMadeAirSignal } from "../hooks/useManMadeAirSignal";
 import { getSkyState } from "./getSkyState";
 import SplashIntro from "./SplashIntro";
 
@@ -42,7 +43,7 @@ const initialMixerPages: MixerPage[] = [
     channels: [
       { id: "train", name: "Train", detail: "Steel rhythm and rail hum" },
       { id: "traffic", name: "Traffic", detail: "Passing tires and city motion" },
-      { id: "factory", name: "Factory", detail: "Machine drones and clanks" },
+      { id: "air", name: "Air", detail: "Aircraft movement and sky lanes" },
       { id: "harbor", name: "Harbor", detail: "Buoys, horns, and distant engines" },
     ],
   },
@@ -56,7 +57,7 @@ const INITIAL_MIX_LEVELS: Record<string, number> = {
   moon: 100,
   train: 100,
   traffic: 100,
-  factory: 100,
+  air: 100,
   harbor: 100,
 };
 
@@ -100,6 +101,7 @@ export default function SkyInstrument({
   const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
+  const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
@@ -123,10 +125,10 @@ export default function SkyInstrument({
     () => ({
       road: (mixLevels.traffic ?? 100) / 100,
       subway: (mixLevels.train ?? 100) / 100,
-      air: (mixLevels.factory ?? 100) / 100,
+      air: (mixLevels.air ?? 100) / 100,
       bus: (mixLevels.harbor ?? 100) / 100,
     }),
-    [mixLevels.factory, mixLevels.harbor, mixLevels.traffic, mixLevels.train],
+    [mixLevels.air, mixLevels.harbor, mixLevels.traffic, mixLevels.train],
   );
   const effectiveWind = clamp01(rawWind * windMix);
   const effectiveRain = clamp01(rawRain * rainMix);
@@ -333,6 +335,7 @@ export default function SkyInstrument({
     if (channelId === "humidity") return Math.round(effectiveHumidity * 100);
     if (channelId === "sun") return Math.round((celestialMix.sun ?? 1) * 100);
     if (channelId === "moon") return Math.round((celestialMix.moon ?? 1) * 100);
+    if (channelId === "air") return Math.round((manMadeAir.air?.normalized.density ?? 0) * 100);
     return mixLevels[channelId] ?? 100;
   }
 
@@ -355,6 +358,28 @@ export default function SkyInstrument({
                 ? "waning"
                 : "new moon";
       return `${weather.isDay ? "Day sky" : "Night sky"} • ${phaseLabel}`;
+    }
+    if (channelId === "air") {
+      if (manMadeAir.status === "loading" || manMadeAir.status === "idle") {
+        return "Loading air traffic…";
+      }
+      if (!manMadeAir.air || manMadeAir.status === "unavailable") {
+        return "Air: unavailable • no air data";
+      }
+      if (manMadeAir.air.count <= 0) {
+        return "Air: live • no nearby aircraft";
+      }
+
+      const nearestDistance =
+        typeof manMadeAir.air.nearestDistanceKm === "number"
+          ? `${manMadeAir.air.nearestDistanceKm.toFixed(1)}km nearest`
+          : "no nearby aircraft";
+      const avgVelocity =
+        typeof manMadeAir.air.avgVelocityMps === "number"
+          ? `${Math.round(manMadeAir.air.avgVelocityMps)}m/s avg`
+          : "velocity n/a";
+
+      return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity}`;
     }
     return "Live: linked to current place signal";
   }
@@ -588,6 +613,10 @@ export default function SkyInstrument({
             </div>
             <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
             <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
+            <div>
+              air: {manMadeAir.air?.count ?? 0} nearby • density {Math.round((manMadeAir.air?.normalized.density ?? 0) * 100)}% •
+              proximity {Math.round((manMadeAir.air?.normalized.proximity ?? 0) * 100)}% • motion {Math.round((manMadeAir.air?.normalized.motion ?? 0) * 100)}%
+            </div>
           </>
         )}
       </div>
