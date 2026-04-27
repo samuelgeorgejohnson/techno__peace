@@ -1,4 +1,5 @@
 import type { CelestialMixerState } from "./CelestialSignals";
+import type { ManMadeSignals } from "./ManMadeSignals";
 
 export type SignalStatus = "idle" | "loading" | "live" | "fallback" | "error";
 
@@ -33,6 +34,23 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   sunLevel: number;
   moonLevel: number;
 };
+
+/**
+ * Shared server payload shape returned by `/signals`.
+ */
+export interface ServerSignalsPayload {
+  coordinates: {
+    lat: number;
+    lon: number;
+  };
+  manMade: {
+    air: ManMadeSignals["air"] | null;
+  };
+  meta: {
+    airStatus: "live" | "unavailable";
+    airError?: string;
+  };
+}
 
 /**
  * Optional mixer controls bundled with the shared payload when needed.
