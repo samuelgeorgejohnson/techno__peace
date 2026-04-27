@@ -34,6 +34,8 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   pressure: number;
   sunLevel: number;
   moonLevel: number;
+  birdsLevel?: number;
+  chimesLevel?: number;
   airMix?: number;
   air?: AirSignal | null;
 };

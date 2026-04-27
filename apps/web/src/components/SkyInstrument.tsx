@@ -25,6 +25,7 @@ const initialMixerPages: MixerPage[] = [
       { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets" },
       { id: "wind", name: "Wind", detail: "Wide gusts and airy movement" },
       { id: "humidity", name: "Humidity", detail: "Diffusion and wet air softness" },
+      { id: "birds", name: "Birds", detail: "Daytime chirps and garden life" },
     ],
   },
   {
@@ -34,6 +35,7 @@ const initialMixerPages: MixerPage[] = [
     channels: [
       { id: "sun", name: "Sun", detail: "Daylight tone movement and warmth" },
       { id: "moon", name: "Moon", detail: "Lunar modulation and night drift" },
+      { id: "chimes", name: "Chimes", detail: "Sparse bell tones and air shimmer" },
     ],
   },
   {
@@ -55,6 +57,8 @@ const INITIAL_MIX_LEVELS: Record<string, number> = {
   humidity: 100,
   sun: 100,
   moon: 100,
+  birds: 100,
+  chimes: 100,
   train: 100,
   traffic: 100,
   air: 100,
@@ -117,6 +121,8 @@ export default function SkyInstrument({
   const humidityMix = (mixLevels.humidity ?? 100) / 100;
   const sunMix = (mixLevels.sun ?? 100) / 100;
   const moonMix = (mixLevels.moon ?? 100) / 100;
+  const birdsMix = (mixLevels.birds ?? 100) / 100;
+  const chimesMix = (mixLevels.chimes ?? 100) / 100;
   const celestialMix: CelestialMixerState = useMemo(
     () => ({ sun: sunMix, moon: moonMix }),
     [moonMix, sunMix],
@@ -209,6 +215,8 @@ export default function SkyInstrument({
       showersMm: 0,
       sunLevel: celestialMix.sun ?? 1,
       moonLevel: celestialMix.moon ?? 1,
+      birdsLevel: birdsMix,
+      chimesLevel: chimesMix,
       airMix: manMadeMix.air ?? 1,
       air: manMadeAir.air,
     };
@@ -217,7 +225,7 @@ export default function SkyInstrument({
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [celestialMix.moon, celestialMix.sun, effectiveHumidity, effectiveRain, effectiveWind, isRunning, manMadeAir.air, manMadeMix.air, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, celestialMix.moon, celestialMix.sun, chimesMix, effectiveHumidity, effectiveRain, effectiveWind, isRunning, manMadeAir.air, manMadeMix.air, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(
     () => () => {
@@ -386,6 +394,12 @@ export default function SkyInstrument({
           : "doppler n/a";
 
       return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
+    }
+    if (channelId === "birds") {
+      return weather.isDay ? "Live: daytime chirps active" : "Live: birds settle after dark";
+    }
+    if (channelId === "chimes") {
+      return weather.isDay ? "Live: soft daytime shimmer" : "Live: night air chimes";
     }
     return "Live: linked to current place signal";
   }
@@ -727,6 +741,28 @@ export default function SkyInstrument({
               </div>
 
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onPointerDown={stopMixerEvent}
+                  onPointerUp={stopMixerEvent}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMixerOpen(false);
+                  }}
+                  aria-label="Back to sky mode"
+                  style={{
+                    padding: "12px 18px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(172, 210, 255, 0.5)",
+                    background: "rgba(122, 170, 255, 0.24)",
+                    color: "white",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    minHeight: 44,
+                  }}
+                >
+                  ← Back to Sky
+                </button>
                 {initialMixerPages.map((page) => {
                   const isActive = page.id === activePage.id;
                   return (
