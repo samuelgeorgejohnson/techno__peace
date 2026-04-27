@@ -39,3 +39,4 @@ Copy `.env.example` to `.env` and fill required keys for your setup:
 - Continue stabilizing the Sky Mode interaction and atmosphere controls.
 - Connect mixer channels to deeper synthesis/sample routing.
 - Expand `/signals` and `/reflect` integration between API and web.
+- `/signals` now includes a server-owned `manMade.air` path backed by the codex-data air-traffic adapter.
