@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  CelestialMixerState,
-  CelestialSignals,
-} from "@technopeace/codex-data/types/CelestialSignals";
+import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-data/types/CelestialSignals";
 import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
+import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { getSkyState } from "./getSkyState";
@@ -189,7 +187,7 @@ export default function SkyInstrument({
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
 
-  function audioParams(nextPt: Pt) {
+  function audioParams(nextPt: Pt): AudioEngineSignalPayload {
     return {
       ...nextPt,
       latitude: weather.latitude,
