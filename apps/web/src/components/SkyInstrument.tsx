@@ -1,4 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  CelestialMixerState,
+  CelestialSignals,
+} from "@technopeace/codex-data/types/CelestialSignals";
+import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { getSkyState } from "./getSkyState";
@@ -24,6 +29,15 @@ const initialMixerPages: MixerPage[] = [
     ],
   },
   {
+    id: "celestial",
+    title: "Celestial channels",
+    blurb: "Balance sunlight and moonlight motion against the weather bed.",
+    channels: [
+      { id: "sun", name: "Sun", detail: "Daylight tone movement and warmth" },
+      { id: "moon", name: "Moon", detail: "Lunar modulation and night drift" },
+    ],
+  },
+  {
     id: "man-made",
     title: "Man-made channels",
     blurb: "Shape the urban and mechanical layers around the weather bed.",
@@ -40,6 +54,8 @@ const INITIAL_MIX_LEVELS: Record<string, number> = {
   wind: 100,
   rain: 100,
   humidity: 100,
+  sun: 100,
+  moon: 100,
   train: 100,
   traffic: 100,
   factory: 100,
@@ -98,9 +114,58 @@ export default function SkyInstrument({
   const windMix = (mixLevels.wind ?? 100) / 100;
   const rainMix = (mixLevels.rain ?? 100) / 100;
   const humidityMix = (mixLevels.humidity ?? 100) / 100;
+  const sunMix = (mixLevels.sun ?? 100) / 100;
+  const moonMix = (mixLevels.moon ?? 100) / 100;
+  const celestialMix: CelestialMixerState = useMemo(
+    () => ({ sun: sunMix, moon: moonMix }),
+    [moonMix, sunMix],
+  );
+  const manMadeMix: ManMadeMixerState = useMemo(
+    () => ({
+      road: (mixLevels.traffic ?? 100) / 100,
+      subway: (mixLevels.train ?? 100) / 100,
+      air: (mixLevels.factory ?? 100) / 100,
+      bus: (mixLevels.harbor ?? 100) / 100,
+    }),
+    [mixLevels.factory, mixLevels.harbor, mixLevels.traffic, mixLevels.train],
+  );
   const effectiveWind = clamp01(rawWind * windMix);
   const effectiveRain = clamp01(rawRain * rainMix);
   const effectiveHumidity = clamp01(rawHumidity * humidityMix);
+  const celestialSignals: CelestialSignals = useMemo(
+    () => ({
+      sun: {
+        altitudeDeg: weather.sunAltitudeDeg,
+        azimuthDeg: 180,
+        dayProgress: clamp01((weather.sunAltitudeDeg + 90) / 180),
+        isDay: weather.isDay,
+        normalized: {
+          presence: clamp01((weather.sunAltitudeDeg + 15) / 105),
+          motion: sunMix,
+          brightness: weather.isDay ? 1 : 0.18,
+          spatialBias: 0,
+          modulationDepth: sunMix,
+          tension: clamp01(1 - weather.cloudCover),
+        },
+      },
+      moon: {
+        altitudeDeg: -weather.sunAltitudeDeg,
+        azimuthDeg: 0,
+        phase: weather.moonPhase,
+        visible: !weather.isDay,
+        illumination: weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2,
+        normalized: {
+          presence: clamp01((90 - weather.sunAltitudeDeg) / 180),
+          motion: moonMix,
+          brightness: clamp01(1 - weather.sunAltitudeDeg / 120),
+          spatialBias: 0,
+          modulationDepth: moonMix,
+          tension: clamp01(weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2),
+        },
+      },
+    }),
+    [moonMix, sunMix, weather.cloudCover, weather.isDay, weather.moonPhase, weather.sunAltitudeDeg],
+  );
   const placeBaseHz = useMemo(
     () => derivePlaceBaseFrequency(weather.latitude, weather.longitude),
     [weather.latitude, weather.longitude],
@@ -141,13 +206,15 @@ export default function SkyInstrument({
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
       showersMm: 0,
+      sunLevel: celestialMix.sun ?? 1,
+      moonLevel: celestialMix.moon ?? 1,
     };
   }
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [effectiveHumidity, effectiveRain, effectiveWind, isRunning, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [celestialMix.moon, celestialMix.sun, effectiveHumidity, effectiveRain, effectiveWind, isRunning, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(
     () => () => {
@@ -249,7 +316,32 @@ export default function SkyInstrument({
     if (channelId === "wind") return Math.round(effectiveWind * 100);
     if (channelId === "rain") return Math.round(effectiveRain * 100);
     if (channelId === "humidity") return Math.round(effectiveHumidity * 100);
+    if (channelId === "sun") return Math.round((celestialMix.sun ?? 1) * 100);
+    if (channelId === "moon") return Math.round((celestialMix.moon ?? 1) * 100);
     return mixLevels[channelId] ?? 100;
+  }
+
+  function channelStatusText(channelId: string) {
+    if (channelId === "sun") {
+      if (weather.isDay) {
+        return `Live: day • altitude ${weather.sunAltitudeDeg.toFixed(0)}°`;
+      }
+      return `Live: below horizon ${Math.abs(weather.sunAltitudeDeg).toFixed(0)}°`;
+    }
+    if (channelId === "moon") {
+      const phaseLabel =
+        weather.moonPhase < 0.1 || weather.moonPhase > 0.9
+          ? "new moon"
+          : weather.moonPhase < 0.4
+            ? "waxing"
+          : weather.moonPhase < 0.6
+              ? "full moon window"
+              : weather.moonPhase < 0.9
+                ? "waning"
+                : "new moon";
+      return `${weather.isDay ? "Day sky" : "Night sky"} • ${phaseLabel}`;
+    }
+    return "Live: linked to current place signal";
   }
 
   return (
@@ -444,6 +536,8 @@ export default function SkyInstrument({
         <div>
           humidity raw/effective: {Math.round(rawHumidity * 100)}% / {Math.round(effectiveHumidity * 100)}%
         </div>
+        <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
+        <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
       </div>
 
       <div
@@ -620,6 +714,9 @@ export default function SkyInstrument({
                   >
                     <span>Level</span>
                     <strong>{channelDisplayPercent(channel.id)}%</strong>
+                  </div>
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.72)", lineHeight: 1.35 }}>
+                    {channelStatusText(channel.id)}
                   </div>
 
                   <input
