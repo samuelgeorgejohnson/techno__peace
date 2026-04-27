@@ -1,4 +1,9 @@
 import type { AirSignal, ManMadeSignalLayer } from "../types/ManMadeSignals";
+import {
+  buildListenerToPlaneVector,
+  computeSafeDopplerMetrics,
+  magnitude3,
+} from "./airMotion";
 
 const EARTH_RADIUS_KM = 6371;
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -8,6 +13,7 @@ export interface AirTrafficRequest {
   lon: number;
   radiusKm: number;
   limit?: number;
+  listenerAltitudeM?: number;
 }
 
 export interface RawAircraftState {
@@ -152,28 +158,64 @@ export const adaptAirTrafficResponse = (
     .filter((aircraft) => aircraft.distanceKm <= request.radiusKm)
     .filter((aircraft) => !aircraft.onGround);
 
-  const nearestDistanceKm = aircraftInRadius.length
-    ? Math.min(...aircraftInRadius.map((aircraft) => aircraft.distanceKm))
+  const listener = {
+    lat: request.lat,
+    lon: request.lon,
+    altitudeM: request.listenerAltitudeM ?? 0,
+  };
+
+  const enrichedAircraft = aircraftInRadius.map((aircraft) => {
+    const listenerToPlane = buildListenerToPlaneVector(listener, {
+      lat: aircraft.lat,
+      lon: aircraft.lon,
+      altitudeM: aircraft.altitudeM ?? 0,
+    });
+    const lineOfSightDistanceKm = magnitude3(listenerToPlane) / 1_000;
+
+    return {
+      ...aircraft,
+      lineOfSightDistanceKm,
+      doppler: computeSafeDopplerMetrics(
+        listenerToPlane,
+        aircraft.headingDeg,
+        aircraft.velocityMps,
+      ),
+    };
+  });
+
+  const nearestDistanceKm = enrichedAircraft.length
+    ? Math.min(...enrichedAircraft.map((aircraft) => aircraft.lineOfSightDistanceKm))
     : undefined;
 
   const avgAltitudeM = average(
-    aircraftInRadius
+    enrichedAircraft
       .map((aircraft) => aircraft.altitudeM)
       .filter((value): value is number => typeof value === "number"),
   );
 
   const avgVelocityMps = average(
-    aircraftInRadius
+    enrichedAircraft
       .map((aircraft) => aircraft.velocityMps)
       .filter((value): value is number => typeof value === "number"),
   );
 
   const headingSpread = (() => {
-    const headings = aircraftInRadius
+    const headings = enrichedAircraft
       .map((aircraft) => aircraft.headingDeg)
       .filter(isFiniteNumber);
     return computeHeadingSpread(headings);
   })();
+
+  const primaryDoppler = enrichedAircraft.reduce<ReturnType<typeof computeSafeDopplerMetrics>>(
+    (best, aircraft) => {
+      if (!aircraft.doppler) return best;
+      if (!best) return aircraft.doppler;
+      return aircraft.doppler.nearestApproachBias > best.nearestApproachBias
+        ? aircraft.doppler
+        : best;
+    },
+    undefined,
+  );
 
   const normalized = buildNormalized({
     count: aircraftInRadius.length,
@@ -190,6 +232,10 @@ export const adaptAirTrafficResponse = (
     avgAltitudeM,
     avgVelocityMps,
     headingSpread,
+    radialVelocityMps: primaryDoppler?.radialVelocityMps,
+    dopplerRatio: primaryDoppler?.dopplerRatio,
+    dopplerCents: primaryDoppler?.dopplerCents,
+    nearestApproachBias: primaryDoppler?.nearestApproachBias,
     normalized,
   };
 };

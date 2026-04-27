@@ -34,3 +34,4 @@ export * from "./types/CelestialSignals";
 export * from "./types/SignalPayload";
 
 export * from "./adapters/airTraffic";
+export * from "./adapters/airMotion";

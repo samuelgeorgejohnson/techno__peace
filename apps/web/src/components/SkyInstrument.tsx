@@ -378,8 +378,12 @@ export default function SkyInstrument({
         typeof manMadeAir.air.avgVelocityMps === "number"
           ? `${Math.round(manMadeAir.air.avgVelocityMps)}m/s avg`
           : "velocity n/a";
+      const doppler =
+        typeof manMadeAir.air.dopplerCents === "number"
+          ? `${manMadeAir.air.dopplerCents >= 0 ? "+" : ""}${manMadeAir.air.dopplerCents.toFixed(1)}c doppler`
+          : "doppler n/a";
 
-      return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity}`;
+      return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
     }
     return "Live: linked to current place signal";
   }
