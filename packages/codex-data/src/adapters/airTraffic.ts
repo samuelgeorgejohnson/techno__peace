@@ -43,6 +43,8 @@ export interface FetchAirTrafficSignalOptions extends AirTrafficRuntimeConfig {
 }
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
 
 const average = (values: number[]): number | undefined => {
   if (values.length === 0) return undefined;
@@ -68,19 +70,74 @@ const buildNormalized = (params: {
   avgVelocityMps?: number;
   avgAltitudeM?: number;
   headingSpread?: number;
-}): ManMadeSignalLayer => ({
-  density: clamp01(params.count / 30),
-  proximity: clamp01(1 - (params.nearestDistanceKm ?? params.radiusKm) / params.radiusKm),
-  motion: clamp01((params.avgVelocityMps ?? 0) / 260),
-  tension: clamp01((params.headingSpread ?? 0) / 180),
-  brightness: clamp01((params.avgAltitudeM ?? 0) / 12_000),
-  pulseRate: Number((0.4 + clamp01(params.count / 20) * 2.2).toFixed(3)),
-});
+}): ManMadeSignalLayer => {
+  const safeRadiusKm = params.radiusKm > 0 ? params.radiusKm : undefined;
+  const proximity = safeRadiusKm
+    ? clamp01(1 - (params.nearestDistanceKm ?? safeRadiusKm) / safeRadiusKm)
+    : 0;
+
+  return {
+    density: clamp01(params.count / 30),
+    proximity,
+    motion: clamp01((params.avgVelocityMps ?? 0) / 260),
+    tension: clamp01((params.headingSpread ?? 0) / 180),
+    brightness: clamp01((params.avgAltitudeM ?? 0) / 12_000),
+    pulseRate: Number((0.4 + clamp01(params.count / 20) * 2.2).toFixed(3)),
+  };
+};
+
+const normalizeBearing = (headingDeg: number): number => {
+  const normalized = headingDeg % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+};
+
+const computeHeadingSpread = (headings: number[]): number | undefined => {
+  if (headings.length < 2) return undefined;
+
+  const normalized = headings.map(normalizeBearing).sort((a, b) => a - b);
+  let largestGap = 0;
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const current = normalized[index];
+    const next = index === normalized.length - 1 ? normalized[0] + 360 : normalized[index + 1];
+    largestGap = Math.max(largestGap, next - current);
+  }
+
+  return 360 - largestGap;
+};
+
+const isRawAircraftState = (payload: unknown): payload is RawAircraftState => {
+  if (!payload || typeof payload !== "object") return false;
+
+  const candidate = payload as Partial<RawAircraftState>;
+  const optionalAltitudeValid =
+    candidate.altitudeM === undefined || isFiniteNumber(candidate.altitudeM);
+  const optionalVelocityValid =
+    candidate.velocityMps === undefined || isFiniteNumber(candidate.velocityMps);
+  const optionalHeadingValid =
+    candidate.headingDeg === undefined || isFiniteNumber(candidate.headingDeg);
+  const optionalOnGroundValid =
+    candidate.onGround === undefined || typeof candidate.onGround === "boolean";
+
+  return (
+    typeof candidate.id === "string" &&
+    isFiniteNumber(candidate.lat) &&
+    isFiniteNumber(candidate.lon) &&
+    optionalAltitudeValid &&
+    optionalVelocityValid &&
+    optionalHeadingValid &&
+    optionalOnGroundValid
+  );
+};
 
 const isRawAirTrafficResponse = (payload: unknown): payload is RawAirTrafficResponse => {
   if (!payload || typeof payload !== "object") return false;
   const candidate = payload as Partial<RawAirTrafficResponse>;
-  return typeof candidate.generatedAt === "string" && Array.isArray(candidate.aircraft);
+  return (
+    typeof candidate.generatedAt === "string" &&
+    Array.isArray(candidate.aircraft) &&
+    candidate.aircraft.every(isRawAircraftState)
+  );
 };
 
 export const adaptAirTrafficResponse = (
@@ -114,9 +171,8 @@ export const adaptAirTrafficResponse = (
   const headingSpread = (() => {
     const headings = aircraftInRadius
       .map((aircraft) => aircraft.headingDeg)
-      .filter((value): value is number => typeof value === "number");
-    if (headings.length < 2) return undefined;
-    return Math.max(...headings) - Math.min(...headings);
+      .filter(isFiniteNumber);
+    return computeHeadingSpread(headings);
   })();
 
   const normalized = buildNormalized({
