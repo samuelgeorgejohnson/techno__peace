@@ -280,6 +280,8 @@ export function useAudioEngine() {
     const precipNorm = clamp((p.rainMm + p.showersMm + p.precipitationMm) / 8);
     const sunLevel = clamp(p.sunLevel, 0, 2);
     const moonLevel = clamp(p.moonLevel, 0, 2);
+    const birdsLevel = clamp(p.birdsLevel ?? 1, 0, 2);
+    const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
 
@@ -366,11 +368,11 @@ export function useAudioEngine() {
     const windSuppression = clamp(1 - 0.65 * windNorm);
     const clearBoost = 0.72 + 0.56 * (1 - cloudCover) * dayness;
     const daylightActivity = Math.pow(dayness, 1.35) * rainSuppression * windSuppression * clearBoost;
-    const daylifeTarget = clamp(daylightActivity, 0, 0.92);
+    const daylifeTarget = clamp(daylightActivity * birdsLevel, 0, 0.92);
     daylifeActivityRef.current += (daylifeTarget - daylifeActivityRef.current) * 0.14;
     const daylifeActivity = clamp(daylifeActivityRef.current);
-    const daylifeDensityPerSec = clamp(0.02 + 0.55 * daylifeActivity, 0.015, 0.6);
-    const daylifeGain = clamp(0.00002 + 0.0035 * daylifeActivity, 0.00002, 0.0038);
+    const daylifeDensityPerSec = clamp((0.02 + 0.55 * daylifeActivity) * (0.1 + 0.9 * birdsLevel), 0, 0.62);
+    const daylifeGain = clamp((0.00002 + 0.0035 * daylifeActivity) * birdsLevel, 0, 0.0045);
     const daylifeBrightness = clamp(1300 + 2100 * daylifeActivity + 250 * (1 - cloudCover), 1100, 3800);
     const windModerate = clamp(1 - Math.abs(windNorm - 0.36) / 0.36);
     const windExtremeSuppression = clamp(1 - Math.pow(clamp((windNorm - 0.7) / 0.3), 1.2));
@@ -379,12 +381,13 @@ export function useAudioEngine() {
     const humiditySoftening = 0.88 + 0.12 * (1 - humidityNorm);
     const chimeTarget =
       clamp(windModerate * windExtremeSuppression * rainChimeSuppression * clearChimeLift * humiditySoftening, 0, 1) *
-      0.8;
+      0.8 *
+      chimesLevel;
     chimeActivityRef.current += (chimeTarget - chimeActivityRef.current) * 0.11;
     const chimeActivity = clamp(chimeActivityRef.current);
-    const chimeDensityPerSec = clamp(0.008 + 0.2 * chimeActivity, 0.008, 0.22);
+    const chimeDensityPerSec = clamp((0.008 + 0.2 * chimeActivity) * (0.15 + 0.85 * chimesLevel), 0, 0.24);
     const chimeBrightness = clamp(1700 + 2200 * (1 - cloudCover) + 500 * (1 - precipNorm), 1500, 4200);
-    const chimeOutput = clamp(0.00001 + 0.0011 * chimeActivity * rainChimeSuppression, 0.00001, 0.0011);
+    const chimeOutput = clamp((0.00001 + 0.0011 * chimeActivity * rainChimeSuppression) * chimesLevel, 0, 0.0014);
 
     const now = ctx.currentTime;
 
@@ -410,7 +413,7 @@ export function useAudioEngine() {
       click.stop(t + 0.1);
     }
 
-    if (now >= nextDaylifeEventRef.current && daylifeActivity > 0.03 && daylifeFilterRef.current) {
+    if (now >= nextDaylifeEventRef.current && daylifeActivity > 0.03 && birdsLevel > 0.001 && daylifeFilterRef.current) {
       const triggerProb = daylifeDensityPerSec * 0.28;
       if (Math.random() < triggerProb) {
         const chirp = ctx.createOscillator();
@@ -434,7 +437,7 @@ export function useAudioEngine() {
       nextDaylifeEventRef.current = now + intervalBase * (0.9 + Math.random() * 0.55);
     }
 
-    if (now >= nextChimeEventRef.current && chimeActivity > 0.02 && chimeFilterRef.current) {
+    if (now >= nextChimeEventRef.current && chimeActivity > 0.02 && chimesLevel > 0.001 && chimeFilterRef.current) {
       const triggerProb = chimeDensityPerSec * 0.35;
       if (Math.random() < triggerProb) {
         const chimeBase = clamp(
