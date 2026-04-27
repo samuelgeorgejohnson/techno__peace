@@ -46,11 +46,15 @@ export function useAudioEngine() {
   const airToneGainRef = useRef<GainNode | null>(null);
   const airPannerRef = useRef<StereoPannerNode | null>(null);
   const airBusGainRef = useRef<GainNode | null>(null);
+  const daylifeFilterRef = useRef<BiquadFilterNode | null>(null);
+  const daylifeGainRef = useRef<GainNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
   const airShimmerLfoRef = useRef<OscillatorNode | null>(null);
   const airShimmerGainRef = useRef<GainNode | null>(null);
+  const daylifeActivityRef = useRef(0);
+  const nextDaylifeEventRef = useRef(0);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -71,10 +75,14 @@ export function useAudioEngine() {
     airToneGainRef.current = null;
     airPannerRef.current = null;
     airBusGainRef.current = null;
+    daylifeFilterRef.current = null;
+    daylifeGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
     airShimmerLfoRef.current = null;
     airShimmerGainRef.current = null;
+    daylifeActivityRef.current = 0;
+    nextDaylifeEventRef.current = 0;
     startedRef.current = false;
   }
 
@@ -170,6 +178,14 @@ export function useAudioEngine() {
     const airBusGain = ctx.createGain();
     airBusGain.gain.value = 0.0;
     airBusGainRef.current = airBusGain;
+    const daylifeFilter = ctx.createBiquadFilter();
+    daylifeFilter.type = "bandpass";
+    daylifeFilter.frequency.value = 2400;
+    daylifeFilter.Q.value = 2.4;
+    daylifeFilterRef.current = daylifeFilter;
+    const daylifeGain = ctx.createGain();
+    daylifeGain.gain.value = 0.0;
+    daylifeGainRef.current = daylifeGain;
 
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
@@ -203,6 +219,8 @@ export function useAudioEngine() {
 
     airPanner.connect(airBusGain);
     airBusGain.connect(gain);
+    daylifeFilter.connect(daylifeGain);
+    daylifeGain.connect(gain);
 
     filter.connect(gain);
     gain.connect(ctx.destination);
@@ -325,6 +343,16 @@ export function useAudioEngine() {
     const airPitchSmoothing = 0.08 + 0.09 * diffusion;
     const airToneSmoothing = 0.09 + 0.11 * diffusion;
     const airGainSmoothing = 0.12 + 0.08 * wetness;
+    const rainSuppression = clamp(1 - 0.82 * rainNorm);
+    const windSuppression = clamp(1 - 0.65 * windNorm);
+    const clearBoost = 0.72 + 0.56 * (1 - cloudCover) * dayness;
+    const daylightActivity = Math.pow(dayness, 1.35) * rainSuppression * windSuppression * clearBoost;
+    const daylifeTarget = clamp(daylightActivity, 0, 0.92);
+    daylifeActivityRef.current += (daylifeTarget - daylifeActivityRef.current) * 0.14;
+    const daylifeActivity = clamp(daylifeActivityRef.current);
+    const daylifeDensityPerSec = clamp(0.02 + 0.55 * daylifeActivity, 0.015, 0.6);
+    const daylifeGain = clamp(0.00002 + 0.0035 * daylifeActivity, 0.00002, 0.0038);
+    const daylifeBrightness = clamp(1300 + 2100 * daylifeActivity + 250 * (1 - cloudCover), 1100, 3800);
 
     const now = ctx.currentTime;
 
@@ -350,6 +378,30 @@ export function useAudioEngine() {
       click.stop(t + 0.1);
     }
 
+    if (now >= nextDaylifeEventRef.current && daylifeActivity > 0.03 && daylifeFilterRef.current) {
+      const triggerProb = daylifeDensityPerSec * 0.28;
+      if (Math.random() < triggerProb) {
+        const chirp = ctx.createOscillator();
+        const chirpGain = ctx.createGain();
+        chirp.type = "triangle";
+        const chirpStart = daylifeBrightness * (0.9 + Math.random() * 0.7);
+        const chirpEnd = chirpStart * (1.08 + Math.random() * 0.2);
+        const chirpDur = 0.03 + Math.random() * 0.07;
+        const chirpAmp = daylifeGain * (0.5 + Math.random() * 0.75);
+        chirp.frequency.setValueAtTime(chirpStart, now);
+        chirp.frequency.exponentialRampToValueAtTime(chirpEnd, now + chirpDur);
+        chirpGain.gain.setValueAtTime(0.00001, now);
+        chirpGain.gain.exponentialRampToValueAtTime(chirpAmp, now + 0.008);
+        chirpGain.gain.exponentialRampToValueAtTime(0.00001, now + chirpDur);
+        chirp.connect(chirpGain);
+        chirpGain.connect(daylifeFilterRef.current);
+        chirp.start(now);
+        chirp.stop(now + chirpDur + 0.015);
+      }
+      const intervalBase = 0.22 + (1 - daylifeActivity) * 1.7;
+      nextDaylifeEventRef.current = now + intervalBase * (0.9 + Math.random() * 0.55);
+    }
+
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
     filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
@@ -368,6 +420,9 @@ export function useAudioEngine() {
     airPannerRef.current?.pan.setTargetAtTime(airWidth, now, 0.16);
     airShimmerLfoRef.current?.frequency.setTargetAtTime(airShimmerRate, now, 0.16);
     airShimmerGainRef.current?.gain.setTargetAtTime(airShimmerDepth, now, 0.16);
+    daylifeFilterRef.current?.frequency.setTargetAtTime(daylifeBrightness, now, 0.2);
+    daylifeFilterRef.current?.Q.setTargetAtTime(1.9 + 1.2 * daylifeActivity, now, 0.2);
+    daylifeGainRef.current?.gain.setTargetAtTime(daylifeGain, now, 0.22);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
