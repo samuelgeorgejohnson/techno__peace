@@ -31,6 +31,7 @@ const initialMixerPages: MixerPage[] = [
       { id: "moon", name: MIXER_VOICE.moon.title, detail: MIXER_VOICE.moon.subtitle, level: 58 },
       { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets", level: 74 },
       { id: "wind", name: "Wind", detail: "Wide gusts and airy movement", level: 68 },
+      { id: "humidity", name: "Humidity", detail: "Air moisture and field bloom", level: 58 },
       {
         id: "wind-chimes",
         name: MIXER_VOICE.windChimes.title,
@@ -154,13 +155,14 @@ export default function SkyInstrument({
     () => getMoonStatus(weather.sunAltitudeDeg, weather.moonPhase, weather.cloudCover),
     [weather.cloudCover, weather.moonPhase, weather.sunAltitudeDeg],
   );
-  const windChimesLevel = useMemo(
-    () =>
-      mixerPages
-        .find((page) => page.id === "weather")
-        ?.channels.find((channel) => channel.id === "wind-chimes")?.level ?? 0,
-    [mixerPages],
-  );
+  const getWeatherChannelLevel = (channelId: string, fallback = 0) =>
+    mixerPages
+      .find((page) => page.id === "weather")
+      ?.channels.find((channel) => channel.id === channelId)?.level ?? fallback;
+  const windChimesLevel = useMemo(() => getWeatherChannelLevel("wind-chimes"), [mixerPages]);
+  const windMph = useMemo(() => getWeatherChannelLevel("wind"), [mixerPages]);
+  const humidityMixPct = useMemo(() => getWeatherChannelLevel("humidity"), [mixerPages]);
+  const rainMixLevel = useMemo(() => getWeatherChannelLevel("rain"), [mixerPages]);
 
   function audioParams(nextPt: Pt) {
     return {
@@ -180,6 +182,9 @@ export default function SkyInstrument({
       showersMm: weather.showersMm,
       windChimesLevel,
       windChimeTuning,
+      windMph,
+      humidityMixPct,
+      rainMixLevel,
     };
   }
 
@@ -190,7 +195,7 @@ export default function SkyInstrument({
       update(audioParams(pt));
     }, 220);
     return () => window.clearInterval(timer);
-  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps, windChimesLevel, windChimeTuning]);
+  }, [isRunning, pt, update, weather.cloudCover, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.sunAltitudeDeg, weather.temperatureC, weather.windMps, windChimeTuning, windChimesLevel, windMph, humidityMixPct, rainMixLevel]);
 
   useEffect(
     () => () => {
@@ -531,6 +536,8 @@ export default function SkyInstrument({
               padding: 28,
               display: "grid",
               gap: 24,
+              maxHeight: "90vh",
+              overflowY: "auto",
             }}
           >
             <div
@@ -653,7 +660,13 @@ export default function SkyInstrument({
                     }}
                   >
                     <span>Level</span>
-                    <strong>{channel.level}%</strong>
+                    <strong>
+                      {channel.id === "wind"
+                        ? `${channel.level} mph`
+                        : channel.id === "humidity"
+                          ? `${channel.level}%`
+                          : `${channel.level}%`}
+                    </strong>
                   </div>
 
                   <input

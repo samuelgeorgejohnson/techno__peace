@@ -20,6 +20,9 @@ export type AudioParams = {
   showersMm: number;
   windChimesLevel: number;
   windChimeTuning: "place" | "solar" | "lunar" | "harmonic";
+  windMph: number;
+  humidityMixPct: number;
+  rainMixLevel: number;
 };
 
 const CHIME_TUNINGS = {
@@ -78,6 +81,10 @@ export function useAudioEngine() {
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
+  const reverbDelayRef = useRef<DelayNode | null>(null);
+  const reverbFeedbackRef = useRef<GainNode | null>(null);
+  const reverbWetRef = useRef<GainNode | null>(null);
+  const reverbToneRef = useRef<BiquadFilterNode | null>(null);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -93,6 +100,10 @@ export function useAudioEngine() {
     noiseGainRef.current = null;
     lfoRef.current = null;
     lfoGainRef.current = null;
+    reverbDelayRef.current = null;
+    reverbFeedbackRef.current = null;
+    reverbWetRef.current = null;
+    reverbToneRef.current = null;
     startedRef.current = false;
     lastChimeStrikeRef.current = 0;
   }
@@ -216,6 +227,23 @@ export function useAudioEngine() {
     lfoGain.gain.value = 0.0;
     lfoGainRef.current = lfoGain;
 
+    const reverbDelay = ctx.createDelay(1.0);
+    reverbDelay.delayTime.value = 0.28;
+    reverbDelayRef.current = reverbDelay;
+
+    const reverbFeedback = ctx.createGain();
+    reverbFeedback.gain.value = 0.26;
+    reverbFeedbackRef.current = reverbFeedback;
+
+    const reverbTone = ctx.createBiquadFilter();
+    reverbTone.type = "lowpass";
+    reverbTone.frequency.value = 2400;
+    reverbToneRef.current = reverbTone;
+
+    const reverbWet = ctx.createGain();
+    reverbWet.gain.value = 0.0001;
+    reverbWetRef.current = reverbWet;
+
     osc.connect(filter);
     sub.connect(filter);
 
@@ -224,6 +252,12 @@ export function useAudioEngine() {
 
     filter.connect(gain);
     gain.connect(ctx.destination);
+    filter.connect(reverbDelay);
+    reverbDelay.connect(reverbTone);
+    reverbTone.connect(reverbWet);
+    reverbWet.connect(ctx.destination);
+    reverbDelay.connect(reverbFeedback);
+    reverbFeedback.connect(reverbDelay);
 
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
@@ -245,8 +279,9 @@ export function useAudioEngine() {
     const y = clamp(p.y);
     const pressure = clamp(p.pressure);
     const cloudCover = clamp(p.cloudCover);
-    const windNorm = clamp(p.windMps / 20);
+    const windNorm = clamp(p.windMph / 100);
     const humidityNorm = clamp(p.humidityPct / 100);
+    const humidityMixNorm = clamp(p.humidityMixPct / 100);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const dayGate = p.isDay ? 1 : 0;
     const dayLight = clamp(0.15 + 0.85 * sunNorm * 1.06);
@@ -254,6 +289,9 @@ export function useAudioEngine() {
     const moonPhase = clamp(p.moonPhase);
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
+    const rainInches = (p.rainMm + p.showersMm) / 25.4;
+    const rainGate = humidityMixNorm >= 1 && rainInches > 0.01 ? 1 : 0;
+    const rainMixNorm = clamp(p.rainMixLevel / 100) * rainGate;
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
     const diffusion = clamp(0.15 + 0.7 * humidityNorm);
     
@@ -278,16 +316,18 @@ export function useAudioEngine() {
         0.18 * windNorm +
         0.08 * cloudCover +
         0.05 * pressure +
-        0.6 * rainNorm) *
+        0.6 * Math.max(rainNorm, rainMixNorm)) *
       (1 - 0.22 * humidityNorm) *
       (0.74 + 0.36 * dayness);
     const master =
       (0.022 + 0.06 * (1 - cloudCover) + 0.068 * pressure + 0.016 * wetness) *
       (0.82 + 0.32 * dayness);
 
+    // Wind channel (0-100 mph) is the direct LFO motion driver.
     const lfoRate =
       (0.03 + 0.48 * sunNorm + 0.45 * Math.pow(1 - y, 1.2)) *
-      (0.64 + 0.64 * dayness);
+      (0.64 + 0.64 * dayness) *
+      (0.38 + 1.35 * windNorm);
     const lfoDepth =
       (0.016 + 0.13 * moonPhase + 0.05 * pressure + 0.028 * diffusion) *
       (0.66 + 0.72 * dayness);
@@ -327,7 +367,7 @@ export function useAudioEngine() {
     }
 
     // 🌧️ rain droplets (random ticks)
-    if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
+    if (rainMixNorm > 0.001 && Math.random() < rainMixNorm * 0.42) {
       const click = ctx.createOscillator();
       const clickGain = ctx.createGain();
 
@@ -341,7 +381,7 @@ export function useAudioEngine() {
 
       const t = now;
       clickGain.gain.setValueAtTime(0.0001, t);
-      clickGain.gain.exponentialRampToValueAtTime(0.02 * rainNorm, t + 0.01);
+      clickGain.gain.exponentialRampToValueAtTime(0.008 + 0.025 * rainMixNorm, t + 0.01);
       clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
 
       click.start(t);
@@ -355,6 +395,8 @@ export function useAudioEngine() {
 
     noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
     gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
+    reverbWetRef.current?.gain.setTargetAtTime(0.0001 + 0.14 * humidityMixNorm, now, 0.08);
+    reverbToneRef.current?.frequency.setTargetAtTime(1300 + 2600 * (1 - humidityMixNorm), now, 0.08);
 
     lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
     lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
