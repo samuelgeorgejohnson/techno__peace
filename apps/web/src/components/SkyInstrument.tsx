@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-data/types/CelestialSignals";
 import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
 import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
+import { MapView } from "@technopeace/codex-map/src/MapView";
+import { useLocation } from "@technopeace/codex-map/src/useLocation";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { useManMadeAirSignal } from "../hooks/useManMadeAirSignal";
@@ -119,7 +121,9 @@ export default function SkyInstrument({
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const latestPointRef = useRef(pt);
+  const { location: activeLocation, setManualLocation } = useLocation();
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
@@ -462,7 +466,7 @@ export default function SkyInstrument({
   }
 
   async function onPointerDown(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio) return;
+    if (mixerOpen || mapOpen || !hasUnlockedAudio) return;
 
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
 
@@ -475,7 +479,7 @@ export default function SkyInstrument({
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio || !isDragging || e.buttons === 0) return;
+    if (mixerOpen || mapOpen || !hasUnlockedAudio || !isDragging || e.buttons === 0) return;
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
@@ -484,7 +488,7 @@ export default function SkyInstrument({
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio) return;
+    if (mixerOpen || mapOpen || !hasUnlockedAudio) return;
     const { x, y } = getXY(e);
     setIsDragging(false);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
@@ -589,7 +593,7 @@ export default function SkyInstrument({
         width: "100vw",
         height: "100vh",
         overflow: "hidden",
-        touchAction: mixerOpen ? "auto" : "none",
+        touchAction: mixerOpen || mapOpen ? "auto" : "none",
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
@@ -809,6 +813,34 @@ export default function SkyInstrument({
         >
           Diagnostics
         </button>
+        <button
+          type="button"
+          onPointerDown={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMapOpen(true);
+          }}
+          aria-label="Open place picker"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: mapOpen ? "rgba(131, 233, 181, 0.24)" : "rgba(255,255,255,0.06)",
+            color: "rgba(255,255,255,0.94)",
+            cursor: "pointer",
+            fontSize: isCompactHud ? 11 : 12,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          Place
+        </button>
         {!isCompactHud && (
           <>
             <div style={{ opacity: 0.9 }}>{locationText}</div>
@@ -917,6 +949,59 @@ export default function SkyInstrument({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {mapOpen && (
+        <div
+          onPointerDown={stopMixerEvent}
+          onPointerMove={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onPointerCancel={stopMixerEvent}
+          onClick={stopMixerEvent}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 8,
+            background: "rgba(5, 10, 24, 0.74)",
+            backdropFilter: "blur(8px)",
+            padding: 16,
+            display: "grid",
+            gridTemplateRows: "auto 1fr",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ color: "rgba(255,255,255,0.9)", fontWeight: 700, letterSpacing: "0.08em" }}>
+              Place Picker
+            </div>
+            <button
+              type="button"
+              onPointerDown={stopMixerEvent}
+              onPointerUp={stopMixerEvent}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMapOpen(false);
+              }}
+              style={{
+                borderRadius: 10,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.08)",
+                color: "white",
+                padding: "8px 12px",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Back to Sky
+            </button>
+          </div>
+          <MapView
+            location={activeLocation}
+            onLocationChange={(bundle) => {
+              setManualLocation(bundle);
+            }}
+            style={{ minHeight: "calc(100vh - 120px)", borderRadius: 18 }}
+          />
         </div>
       )}
 

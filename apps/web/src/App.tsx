@@ -1,44 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useLocation } from "@technopeace/codex-map/src/useLocation";
 import SkyInstrument from "./components/SkyInstrument";
 
 export default function App() {
-  const [location, setLocation] = useState<GeolocationPosition | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
-
-  const requestLocation = () => {
-    if (!("geolocation" in navigator)) {
-      setLocationError("Geolocation not supported in this browser.");
-      return;
-    }
-
-    setIsRequestingLocation(true);
-    setLocationError(null);
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocation(pos);
-        setIsRequestingLocation(false);
-      },
-      (err) => {
-        setLocationError(err.message);
-        setIsRequestingLocation(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      }
-    );
-  };
-
-  useEffect(() => {
-    requestLocation();
-  }, []);
+  const { location, error: locationError, isRequestingLocation, requestCurrentLocation, source } = useLocation();
 
   const locationText = useMemo(() => {
-    if (location) {
-      return `${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}`;
+    if (location.placeName) {
+      return location.placeName;
+    }
+
+    if (location.lat !== 0 || location.lon !== 0) {
+      const sourceLabel = source === "manual" ? "manual" : source === "gps" ? "gps" : "default";
+      return `${location.lat.toFixed(5)}, ${location.lon.toFixed(5)} (${sourceLabel})`;
     }
 
     if (locationError) {
@@ -50,14 +24,14 @@ export default function App() {
     }
 
     return "Location not requested yet.";
-  }, [isRequestingLocation, location, locationError]);
+  }, [isRequestingLocation, location, locationError, source]);
 
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <SkyInstrument
         locationText={locationText}
         isRequestingLocation={isRequestingLocation}
-        onRequestLocation={requestLocation}
+        onRequestLocation={() => requestCurrentLocation(true)}
       />
     </div>
   );
