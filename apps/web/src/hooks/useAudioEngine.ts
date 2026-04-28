@@ -367,12 +367,14 @@ export function useAudioEngine() {
     const rainSuppression = clamp(1 - 0.82 * rainNorm);
     const windSuppression = clamp(1 - 0.65 * windNorm);
     const clearBoost = 0.72 + 0.56 * (1 - cloudCover) * dayness;
-    const daylightActivity = Math.pow(dayness, 1.35) * rainSuppression * windSuppression * clearBoost;
+    const dawnBoost = clamp(1 - Math.abs(sunNorm - 0.3) / 0.26);
+    const daylightActivity =
+      Math.pow(dayness, 1.35) * rainSuppression * windSuppression * clearBoost * (0.78 + 0.58 * dawnBoost);
     const daylifeTarget = clamp(daylightActivity * birdsLevel, 0, 0.92);
     daylifeActivityRef.current += (daylifeTarget - daylifeActivityRef.current) * 0.14;
     const daylifeActivity = clamp(daylifeActivityRef.current);
-    const daylifeDensityPerSec = clamp((0.02 + 0.55 * daylifeActivity) * (0.1 + 0.9 * birdsLevel), 0, 0.62);
-    const daylifeGain = clamp((0.00002 + 0.0035 * daylifeActivity) * birdsLevel, 0, 0.0045);
+    const daylifeDensityPerSec = clamp((0.03 + 0.68 * daylifeActivity) * (0.16 + 0.95 * birdsLevel), 0, 0.9);
+    const daylifeGain = clamp((0.00005 + 0.008 * daylifeActivity) * birdsLevel, 0, 0.012);
     const daylifeBrightness = clamp(1300 + 2100 * daylifeActivity + 250 * (1 - cloudCover), 1100, 3800);
     const windModerate = clamp(1 - Math.abs(windNorm - 0.36) / 0.36);
     const windExtremeSuppression = clamp(1 - Math.pow(clamp((windNorm - 0.7) / 0.3), 1.2));
@@ -385,9 +387,9 @@ export function useAudioEngine() {
       chimesLevel;
     chimeActivityRef.current += (chimeTarget - chimeActivityRef.current) * 0.11;
     const chimeActivity = clamp(chimeActivityRef.current);
-    const chimeDensityPerSec = clamp((0.008 + 0.2 * chimeActivity) * (0.15 + 0.85 * chimesLevel), 0, 0.24);
+    const chimeDensityPerSec = clamp((0.01 + 0.18 * chimeActivity) * (0.2 + 0.85 * chimesLevel), 0, 0.26);
     const chimeBrightness = clamp(1700 + 2200 * (1 - cloudCover) + 500 * (1 - precipNorm), 1500, 4200);
-    const chimeOutput = clamp((0.00001 + 0.0011 * chimeActivity * rainChimeSuppression) * chimesLevel, 0, 0.0014);
+    const chimeOutput = clamp((0.00003 + 0.0024 * chimeActivity * rainChimeSuppression) * chimesLevel, 0, 0.0042);
 
     const now = ctx.currentTime;
 
@@ -413,16 +415,16 @@ export function useAudioEngine() {
       click.stop(t + 0.1);
     }
 
-    if (now >= nextDaylifeEventRef.current && daylifeActivity > 0.03 && birdsLevel > 0.001 && daylifeFilterRef.current) {
-      const triggerProb = daylifeDensityPerSec * 0.28;
+    if (now >= nextDaylifeEventRef.current && daylifeActivity > 0.02 && birdsLevel > 0.001 && daylifeFilterRef.current) {
+      const triggerProb = daylifeDensityPerSec * 0.52;
       if (Math.random() < triggerProb) {
         const chirp = ctx.createOscillator();
         const chirpGain = ctx.createGain();
         chirp.type = "triangle";
         const chirpStart = daylifeBrightness * (0.9 + Math.random() * 0.7);
         const chirpEnd = chirpStart * (1.08 + Math.random() * 0.2);
-        const chirpDur = 0.03 + Math.random() * 0.07;
-        const chirpAmp = daylifeGain * (0.5 + Math.random() * 0.75);
+        const chirpDur = 0.028 + Math.random() * 0.06;
+        const chirpAmp = daylifeGain * (0.72 + Math.random() * 0.86);
         chirp.frequency.setValueAtTime(chirpStart, now);
         chirp.frequency.exponentialRampToValueAtTime(chirpEnd, now + chirpDur);
         chirpGain.gain.setValueAtTime(0.00001, now);
@@ -433,7 +435,7 @@ export function useAudioEngine() {
         chirp.start(now);
         chirp.stop(now + chirpDur + 0.015);
       }
-      const intervalBase = 0.22 + (1 - daylifeActivity) * 1.7;
+      const intervalBase = 0.16 + (1 - daylifeActivity) * 1.3;
       nextDaylifeEventRef.current = now + intervalBase * (0.9 + Math.random() * 0.55);
     }
 

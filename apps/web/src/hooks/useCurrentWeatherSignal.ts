@@ -72,6 +72,7 @@ export function useCurrentWeatherSignal() {
 
   useEffect(() => {
     const controller = new AbortController();
+    let pollHandle: number | null = null;
 
     async function loadWeather() {
       setSignal((current) => ({
@@ -142,8 +143,16 @@ export function useCurrentWeatherSignal() {
     }
 
     void loadWeather();
+    pollHandle = window.setInterval(() => {
+      void loadWeather();
+    }, 90_000);
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (pollHandle !== null) {
+        window.clearInterval(pollHandle);
+      }
+    };
   }, [coords.lat, coords.lon, locationError]);
 
   return signal;
