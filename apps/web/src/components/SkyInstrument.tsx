@@ -5,6 +5,7 @@ import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/Sig
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { useManMadeAirSignal } from "../hooks/useManMadeAirSignal";
+import { useTrafficSignal } from "../hooks/useTrafficSignal";
 import { getSkyState } from "./getSkyState";
 import SplashIntro from "./SplashIntro";
 
@@ -13,6 +14,14 @@ function clamp01(x: number) {
 }
 function clampRange(x: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, x));
+}
+
+
+function describeCongestionLevel(congestion: number) {
+  if (congestion < 0.25) return "low";
+  if (congestion < 0.6) return "moderate";
+  if (congestion < 0.85) return "heavy";
+  return "severe";
 }
 
 type Pt = { x: number; y: number; pressure: number };
@@ -121,6 +130,7 @@ export default function SkyInstrument({
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
+  const trafficSignal = useTrafficSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
   const dronePressure = 0.58;
@@ -226,6 +236,12 @@ export default function SkyInstrument({
         : "unavailable";
   const manMadeSourceStatus: DiagnosticSourceStatus =
     manMadeAir.status === "live" ? "live" : manMadeAir.status === "unavailable" ? "unavailable" : "fallback";
+  const trafficSourceStatus: DiagnosticSourceStatus =
+    trafficSignal.status === "live"
+      ? "live"
+      : trafficSignal.status === "unavailable"
+        ? "unavailable"
+        : "fallback";
 
   const diagnosticsRows: DiagnosticRow[] = useMemo(() => {
     const fmtPercent = (value: number) => `${Math.round(value * 100)}%`;
@@ -296,6 +312,21 @@ export default function SkyInstrument({
         note: "nearby aircraft presence used for air tone/noise drive",
       },
       {
+        category: "Man-made road values",
+        label: "Traffic flow / congestion",
+        raw:
+          trafficSignal.traffic
+            ? `${fmtPercent(trafficSignal.traffic.flow)} / ${fmtPercent(trafficSignal.traffic.congestion)}`
+            : unavailable,
+        userControl: fmtPercent(manMadeMix.road ?? 1),
+        effective:
+          trafficSignal.traffic
+            ? `${fmtPercent(trafficSignal.traffic.flow * (manMadeMix.road ?? 1))} / ${fmtPercent(trafficSignal.traffic.congestion * (manMadeMix.road ?? 1))}`
+            : unavailable,
+        source: trafficSourceStatus,
+        note: "live TomTom flow segment ratio plus traffic slider mix",
+      },
+      {
         category: "Mixer levels",
         label: "Birds slider",
         raw: fmtPercent(weather.isDay ? 1 : 0.2),
@@ -342,7 +373,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, trafficSignal.traffic, trafficSourceStatus, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -371,8 +402,10 @@ export default function SkyInstrument({
       chimesLevel: chimesMix,
       airMix: manMadeMix.air ?? 1,
       air: manMadeAir.air,
+      trafficMix: manMadeMix.road ?? 1,
+      traffic: trafficSignal.traffic,
     };
-  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.road, trafficSignal.traffic, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -515,6 +548,7 @@ export default function SkyInstrument({
     if (channelId === "birds") return Math.round(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) * 100);
     if (channelId === "chimes") return Math.round(clampRange((0.35 + 0.65 * nightFactor) * chimesMix, 0, 2) * 100);
     if (channelId === "air") return Math.round((manMadeAir.air?.normalized.density ?? 0) * 100);
+    if (channelId === "traffic") return Math.round((trafficSignal.traffic?.congestion ?? 0) * 100);
     return mixLevels[channelId] ?? 100;
   }
 
@@ -570,7 +604,15 @@ export default function SkyInstrument({
     if (channelId === "chimes") {
       return weather.isDay ? "Live: sparse wind chimes" : "Live: sparse night bell tones";
     }
-    if (channelId === "train" || channelId === "traffic" || channelId === "harbor") {
+    if (channelId === "traffic") {
+      if (trafficSignal.status === "loading" || trafficSignal.status === "idle") return "Traffic: loading live flow…";
+      if (!trafficSignal.traffic || trafficSignal.status !== "live") return "Traffic: unavailable";
+
+      const traffic = trafficSignal.traffic;
+      const closure = traffic.roadClosure ? " • road closed" : "";
+      return `Traffic: ${Math.round(traffic.currentSpeedMph)} mph / free ${Math.round(traffic.freeFlowSpeedMph)} mph • ${describeCongestionLevel(traffic.congestion)} congestion • delay ${(1 + traffic.delay * 3).toFixed(1)}x • confidence ${traffic.confidence.toFixed(2)}${closure}`;
+    }
+    if (channelId === "train" || channelId === "harbor") {
       return "Manual texture • Not Live";
     }
     return "Manual texture";
@@ -850,6 +892,9 @@ export default function SkyInstrument({
             </div>
             <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
             <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
+            <div>traffic: {trafficSignal.traffic ? `${Math.round(trafficSignal.traffic.currentSpeedMph)} mph / free ${Math.round(trafficSignal.traffic.freeFlowSpeedMph)} mph` : "unavailable"}</div>
+            <div>congestion: {trafficSignal.traffic ? describeCongestionLevel(trafficSignal.traffic.congestion) : "unavailable"} / mix {Math.round((manMadeMix.road ?? 1) * 100)}%</div>
+            <div>delay: {trafficSignal.traffic ? `${(1 + trafficSignal.traffic.delay * 3).toFixed(1)}x` : "n/a"} • confidence: {trafficSignal.traffic ? trafficSignal.traffic.confidence.toFixed(2) : "n/a"}</div>
             <div>
               air: {manMadeAir.air?.count ?? 0} nearby • density {Math.round((manMadeAir.air?.normalized.density ?? 0) * 100)}% •
               proximity {Math.round((manMadeAir.air?.normalized.proximity ?? 0) * 100)}% • motion {Math.round((manMadeAir.air?.normalized.motion ?? 0) * 100)}%

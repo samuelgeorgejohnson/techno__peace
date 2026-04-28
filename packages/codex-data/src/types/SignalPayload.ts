@@ -1,5 +1,5 @@
 import type { CelestialMixerState } from "./CelestialSignals";
-import type { AirSignal } from "./ManMadeSignals";
+import type { AirSignal, TrafficSignal } from "./ManMadeSignals";
 import type { ManMadeSignals } from "./ManMadeSignals";
 
 export type SignalStatus = "idle" | "loading" | "live" | "fallback" | "error";
@@ -38,6 +38,8 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   chimesLevel?: number;
   airMix?: number;
   air?: AirSignal | null;
+  trafficMix?: number;
+  traffic?: TrafficSignal | null;
 };
 
 /**
@@ -50,10 +52,13 @@ export interface ServerSignalsPayload {
   };
   manMade: {
     air: ManMadeSignals["air"] | null;
+    road: ManMadeSignals["road"] | null;
   };
   meta: {
     airStatus: "live" | "unavailable";
+    roadStatus: "live" | "unavailable";
     airError?: string;
+    roadError?: string;
   };
 }
 
