@@ -51,6 +51,7 @@ export interface FetchAirTrafficSignalOptions extends AirTrafficRuntimeConfig {
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
+const fractional = (value: number): number => value - Math.floor(value);
 
 const average = (values: number[]): number | undefined => {
   if (values.length === 0) return undefined;
@@ -95,6 +96,77 @@ const buildNormalized = (params: {
 const normalizeBearing = (headingDeg: number): number => {
   const normalized = headingDeg % 360;
   return normalized < 0 ? normalized + 360 : normalized;
+};
+
+const hashNoise = (lat: number, lon: number, seed: number): number =>
+  fractional(Math.sin((lat + 90) * 12.9898 + (lon + 180) * 78.233 + seed * 37.719) * 43758.5453);
+
+const computeUrbanBias = (lat: number, lon: number): number => {
+  const majorUrbanClusters: Array<{ lat: number; lon: number; weight: number }> = [
+    { lat: 40.7128, lon: -74.006, weight: 1 },
+    { lat: 34.0522, lon: -118.2437, weight: 0.95 },
+    { lat: 41.8781, lon: -87.6298, weight: 0.78 },
+    { lat: 29.7604, lon: -95.3698, weight: 0.72 },
+    { lat: 33.4484, lon: -112.074, weight: 0.64 },
+    { lat: 51.5072, lon: -0.1276, weight: 0.84 },
+    { lat: 48.8566, lon: 2.3522, weight: 0.81 },
+    { lat: 35.6762, lon: 139.6503, weight: 0.95 },
+  ];
+
+  const clusterInfluence = majorUrbanClusters.reduce((best, cluster) => {
+    const distanceKm = haversineKm(lat, lon, cluster.lat, cluster.lon);
+    const influence = cluster.weight * Math.exp(-distanceKm / 420);
+    return Math.max(best, influence);
+  }, 0);
+
+  const coastalBias = clamp01(0.15 + Math.abs(Math.sin((lon * Math.PI) / 180)) * 0.18);
+  const latitudeBias = clamp01(0.2 + 0.3 * (1 - Math.abs(lat) / 90));
+  return clamp01(0.45 * clusterInfluence + 0.3 * coastalBias + 0.25 * latitudeBias);
+};
+
+const buildProceduralAirSignal = (request: AirTrafficRequest, now = new Date()): AirSignal => {
+  const minutesOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const dayWave = (Math.sin(((minutesOfDay - 360) / 1440) * Math.PI * 2) + 1) / 2;
+  const isDayLike = dayWave > 0.45;
+  const dayDensityFloor = isDayLike ? 0.2 : 0.01;
+  const dayDensityCeil = isDayLike ? 0.6 : 0.2;
+  const urbanBias = computeUrbanBias(request.lat, request.lon);
+
+  const driftWindow = now.getTime() / (1000 * 60 * 18);
+  const driftSlow = (Math.sin(driftWindow + hashNoise(request.lat, request.lon, 1.4) * Math.PI * 2) + 1) / 2;
+  const driftMid = (Math.sin(driftWindow * 1.8 + hashNoise(request.lat, request.lon, 4.2) * Math.PI * 2) + 1) / 2;
+  const seededVariance = hashNoise(request.lat, request.lon, Math.floor(driftWindow));
+
+  const densityUnclamped =
+    dayDensityFloor +
+    (dayDensityCeil - dayDensityFloor) * (0.55 * dayWave + 0.3 * urbanBias + 0.15 * driftSlow);
+  const density = clamp01(densityUnclamped * (0.9 + seededVariance * 0.2));
+  const proximity = clamp01(0.1 + 0.55 * urbanBias + 0.25 * driftMid + 0.1 * dayWave);
+  const motion = clamp01(0.14 + 0.5 * dayWave + 0.22 * driftSlow + 0.14 * seededVariance);
+
+  const nearbyCount = Math.max(0, Math.round(density * (3 + urbanBias * 9 + dayWave * 6)));
+  const nearestDistanceKm = nearbyCount > 0 ? Math.max(2, (1 - proximity) * request.radiusKm * 0.9) : request.radiusKm;
+  const avgVelocityMps = 150 + motion * 95;
+  const avgAltitudeM = 1800 + (0.4 + 0.6 * density) * 7800;
+  const headingSpread = 20 + 140 * motion;
+
+  const normalized: ManMadeSignalLayer = {
+    density,
+    proximity,
+    motion,
+    tension: clamp01(0.2 + 0.55 * motion + 0.25 * density),
+    brightness: clamp01(0.22 + 0.6 * density + 0.18 * dayWave),
+    pulseRate: Number((0.42 + density * 1.7 + motion * 0.8).toFixed(3)),
+  };
+
+  return {
+    count: nearbyCount,
+    nearestDistanceKm,
+    avgAltitudeM,
+    avgVelocityMps,
+    headingSpread,
+    normalized,
+  };
 };
 
 const computeHeadingSpread = (headings: number[]): number | undefined => {
@@ -245,12 +317,8 @@ export const fetchAirTrafficSignal = async (
   options: FetchAirTrafficSignalOptions,
 ): Promise<AirSignal> => {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
-  if (!fetchImpl) {
-    throw new Error("fetchAirTrafficSignal requires fetch support in runtime or options.fetchImpl");
-  }
-
-  if (!options.apiUrl) {
-    throw new Error("Missing air-traffic API URL. Set AIR_TRAFFIC_API_URL in runtime config.");
+  if (!fetchImpl || !options.apiUrl) {
+    return buildProceduralAirSignal(request);
   }
 
   const url = new URL(options.apiUrl);
@@ -274,15 +342,17 @@ export const fetchAirTrafficSignal = async (
     });
 
     if (!response.ok) {
-      throw new Error(`Air traffic request failed: ${response.status}`);
+      return buildProceduralAirSignal(request);
     }
 
     const payload = (await response.json()) as unknown;
     if (!isRawAirTrafficResponse(payload)) {
-      throw new Error("Air traffic response did not match expected schema.");
+      return buildProceduralAirSignal(request);
     }
 
     return adaptAirTrafficResponse(payload, request);
+  } catch {
+    return buildProceduralAirSignal(request);
   } finally {
     clearTimeout(timeout);
   }
