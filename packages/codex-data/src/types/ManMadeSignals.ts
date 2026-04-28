@@ -46,15 +46,19 @@ export interface SubwaySignal {
 }
 
 /**
- * Road-traffic signal derived from flow speed and congestion state.
+ * Normalized road traffic signal from TomTom flow segment data.
  */
-export interface RoadSignal {
-  nearestRoadDistanceM?: number;
-  currentSpeedKph?: number;
-  freeFlowSpeedKph?: number;
-  relativeFlow?: number;
-  congested: boolean;
-  normalized: ManMadeSignalLayer;
+export interface TrafficSignal {
+  currentSpeedMph: number;
+  freeFlowSpeedMph: number;
+  currentTravelTimeSec: number;
+  freeFlowTravelTimeSec: number;
+  confidence: number;
+  roadClosure: boolean;
+  congestion: number;
+  flow: number;
+  delay: number;
+  status: "live" | "unavailable" | "error";
 }
 
 /**
@@ -74,7 +78,7 @@ export interface BusSignal {
 export interface ManMadeSignals {
   air?: AirSignal;
   subway?: SubwaySignal;
-  road?: RoadSignal;
+  road?: TrafficSignal;
   bus?: BusSignal;
 }
 

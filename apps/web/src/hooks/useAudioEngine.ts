@@ -329,6 +329,14 @@ export function useAudioEngine() {
     const gainSmoothing = 0.03 + 0.045 * wetness;
     const manMadeAir = p.air;
     const airMix = clamp(p.airMix ?? 1);
+    const trafficSignal = p.traffic;
+    const trafficMix = clamp(p.trafficMix ?? 1, 0, 2);
+    const trafficConfidence = clamp(trafficSignal?.confidence ?? 0);
+    const trafficInfluence = trafficSignal ? clamp(trafficMix * trafficConfidence, 0, 2) : 0;
+    const trafficCongestion = trafficSignal ? clamp(trafficSignal.congestion) : 0;
+    const trafficFlow = trafficSignal ? clamp(trafficSignal.flow) : 0;
+    const trafficDelay = trafficSignal ? clamp(trafficSignal.delay) : 0;
+    const trafficClosure = Boolean(trafficSignal?.roadClosure);
     const airPresenceNorm = clamp(
       manMadeAir?.normalized.proximity ??
         (manMadeAir?.nearestDistanceKm ? 1 / (1 + manMadeAir.nearestDistanceKm / 30) : 0),
@@ -390,6 +398,19 @@ export function useAudioEngine() {
     const chimeDensityPerSec = clamp((0.01 + 0.18 * chimeActivity) * (0.2 + 0.85 * chimesLevel), 0, 0.26);
     const chimeBrightness = clamp(1700 + 2200 * (1 - cloudCover) + 500 * (1 - precipNorm), 1500, 4200);
     const chimeOutput = clamp((0.00003 + 0.0024 * chimeActivity * rainChimeSuppression) * chimesLevel, 0, 0.0042);
+
+    const trafficHum = trafficCongestion * trafficInfluence;
+    const trafficMotion = trafficFlow * trafficInfluence;
+    const trafficTension = trafficDelay * trafficInfluence;
+    const trafficBlockage = trafficClosure ? trafficInfluence : 0;
+
+    const trafficNoiseBoost = 0.12 * trafficHum + 0.08 * trafficTension + 0.18 * trafficBlockage;
+    const trafficMasterBoost = 0.16 * trafficHum + 0.06 * trafficMotion;
+    const trafficCutoffDamp = 1 - (0.22 * trafficHum + 0.14 * trafficBlockage);
+    const trafficPulseBoost = 0.32 * trafficMotion;
+    const trafficTensionDepth = 0.45 * trafficTension + 0.2 * trafficBlockage;
+    const trafficJitterCents = (Math.random() * 2 - 1) * (2 + 18 * trafficTension + 14 * trafficBlockage);
+    const trafficJitterRatio = Math.pow(2, trafficJitterCents / 1200);
 
     const now = ctx.currentTime;
 
@@ -470,13 +491,13 @@ export function useAudioEngine() {
       nextChimeEventRef.current = now + intervalBase * (0.85 + Math.random() * 0.45);
     }
 
-    oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
-    subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
-    filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
+    oscRef.current?.frequency.setTargetAtTime(baseHz * trafficJitterRatio, now, pitchSmoothing);
+    subRef.current?.frequency.setTargetAtTime(subHz * (1 + 0.03 * trafficTension - 0.04 * trafficBlockage), now, pitchSmoothing + 0.01);
+    filterRef.current?.frequency.setTargetAtTime(cutoff * trafficCutoffDamp, now, toneSmoothing);
     filterRef.current?.Q.setTargetAtTime(filterQ, now, toneSmoothing);
 
-    noiseGainRef.current?.gain.setTargetAtTime(noiseAmt, now, gainSmoothing);
-    gainRef.current?.gain.setTargetAtTime(master, now, gainSmoothing);
+    noiseGainRef.current?.gain.setTargetAtTime(clamp(noiseAmt * (1 + trafficNoiseBoost), 0, 1), now, gainSmoothing);
+    gainRef.current?.gain.setTargetAtTime(clamp(master * (1 + trafficMasterBoost), 0, 1), now, gainSmoothing);
     airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, airGainSmoothing);
     airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, airGainSmoothing);
     airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.16);
@@ -495,8 +516,8 @@ export function useAudioEngine() {
     chimeFilterRef.current?.Q.setTargetAtTime(4.2 + 1.7 * (1 - precipNorm), now, 0.24);
     chimeGainRef.current?.gain.setTargetAtTime(chimeOutput, now, 0.26);
 
-    lfoRef.current?.frequency.setTargetAtTime(lfoRate, now, 0.03);
-    lfoGainRef.current?.gain.setTargetAtTime(lfoDepth, now, 0.03);
+    lfoRef.current?.frequency.setTargetAtTime(lfoRate * (1 + trafficPulseBoost), now, 0.03);
+    lfoGainRef.current?.gain.setTargetAtTime(lfoDepth * (1 + trafficTensionDepth), now, 0.03);
   }
 
   function stop() {
