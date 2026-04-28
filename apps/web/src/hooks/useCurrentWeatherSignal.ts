@@ -59,16 +59,16 @@ function estimateSunAltitude(nowIso: string, sunriseIso?: string, sunsetIso?: st
 }
 
 export function useCurrentWeatherSignal() {
-  const { location, error: locationError } = useLocation();
+  const { location, error: locationError, source } = useLocation();
   const [signal, setSignal] = useState<CurrentWeatherSignalPayload>(DEFAULT_SIGNAL);
 
   const coords = useMemo(() => {
-    if (location.lat !== 0 || location.lon !== 0) {
+    if (source !== "default") {
       return { lat: location.lat, lon: location.lon };
     }
 
     return FALLBACK_COORDS;
-  }, [location.lat, location.lon]);
+  }, [location.lat, location.lon, source]);
 
   useEffect(() => {
     const controller = new AbortController();
