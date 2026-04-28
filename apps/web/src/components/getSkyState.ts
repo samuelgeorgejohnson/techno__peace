@@ -97,15 +97,15 @@ export function getSkyState({
   const dayBlue = smoothstep(8, 45, sun);
 
   const nightTop: [number, number, number] = [8, 16, 38];
-  const dawnTop: [number, number, number] = [34, 53, 92];
+  const dawnTop: [number, number, number] = [56, 70, 104];
   const dayTop: [number, number, number] = [74, 139, 226];
 
   const nightMid: [number, number, number] = [14, 24, 52];
-  const dawnMid: [number, number, number] = [77, 105, 162];
+  const dawnMid: [number, number, number] = [168, 136, 92];
   const dayMid: [number, number, number] = [126, 182, 244];
 
   const nightHorizon: [number, number, number] = [20, 30, 58];
-  const dawnHorizon: [number, number, number] = [222, 144, 112];
+  const dawnHorizon: [number, number, number] = [246, 196, 122];
   const dayHorizon: [number, number, number] = [186, 214, 252];
 
   const moonTint: [number, number, number] = [128, 148, 188];
@@ -122,17 +122,24 @@ export function getSkyState({
     moonTintStrength,
   );
   const horizonBase = blendRgb(
-    blendRgb(blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.6, dayness * 0.72)), dayHorizon, dayBlue),
+    blendRgb(
+      blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.72 + goldenWarmth * 0.2, dayness * 0.5)),
+      dayHorizon,
+      dayBlue * 0.85,
+    ),
     moonTint,
     moonTintStrength * 0.72,
   );
 
+  const goldenTint: [number, number, number] = [255, 196, 112];
+  const goldenTintStrength = clamp01(horizonWarmth * 0.42 + goldenWarmth * 0.58) * (1 - dayBlue * 0.45);
+
   const overcastTint = blendRgb([44, 52, 76], [132, 145, 166], dayness);
   const cloudMute = smoothstep(0.35, 1, cloud) * (0.4 + 0.24 * dayness);
 
-  const topColor = toRgbString(blendRgb(topBase, overcastTint, cloudMute));
-  const midColor = toRgbString(blendRgb(midBase, overcastTint, cloudMute * 0.85));
-  const horizonColor = toRgbString(blendRgb(horizonBase, overcastTint, cloudMute * 0.65));
+  const topColor = toRgbString(blendRgb(blendRgb(topBase, goldenTint, goldenTintStrength * 0.22), overcastTint, cloudMute));
+  const midColor = toRgbString(blendRgb(blendRgb(midBase, goldenTint, goldenTintStrength * 0.36), overcastTint, cloudMute * 0.85));
+  const horizonColor = toRgbString(blendRgb(blendRgb(horizonBase, goldenTint, goldenTintStrength * 0.64), overcastTint, cloudMute * 0.65));
 
   const cloudDensity = cloud < 0.34 ? "low" : cloud < 0.68 ? "medium" : "high";
   const cloudOpacity =
