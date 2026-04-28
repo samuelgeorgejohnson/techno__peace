@@ -50,10 +50,13 @@ export interface ServerSignalsPayload {
   };
   manMade: {
     air: ManMadeSignals["air"] | null;
+    road: ManMadeSignals["road"] | null;
   };
   meta: {
     airStatus: "live" | "unavailable";
+    roadStatus: "live" | "unavailable";
     airError?: string;
+    roadError?: string;
   };
 }
 
