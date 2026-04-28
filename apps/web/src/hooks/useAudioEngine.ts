@@ -275,11 +275,17 @@ export function useAudioEngine() {
     const dayLight = clamp(0.15 + 0.85 * sunNorm * 1.06);
     const dayness = clamp(0.68 * dayGate + 0.32 * dayLight);
     const moonPhase = clamp(p.moonPhase);
+    const sunNatural = clamp((p.isDay ? 0.1 : 0.03) + clamp((p.sunAltitudeDeg + 6) / 72) * (p.isDay ? 0.9 : 0.07));
+    const moonIllumination = 1 - Math.abs(0.5 - moonPhase) * 2;
+    const nightFactor = clamp((-p.sunAltitudeDeg + 6) / 24);
+    const moonNatural = clamp((0.2 + 0.8 * moonIllumination) * nightFactor * (p.isDay ? 0.22 : 1));
     const tempNorm = clamp((p.temperatureC + 10) / 40);
     const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
     const precipNorm = clamp((p.rainMm + p.showersMm + p.precipitationMm) / 8);
     const sunLevel = clamp(p.sunLevel, 0, 2);
     const moonLevel = clamp(p.moonLevel, 0, 2);
+    const sunInfluence = clamp(sunNatural * sunLevel, 0, 2);
+    const moonInfluence = clamp(moonNatural * moonLevel, 0, 2);
     const birdsLevel = clamp(p.birdsLevel ?? 1, 0, 2);
     const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
     const wetness = clamp(0.18 + 0.56 * humidityNorm + 0.3 * rainNorm);
@@ -290,18 +296,21 @@ export function useAudioEngine() {
     const centerTuneRatio = Math.pow(2, centerTuneSemitones / 12);
     const weatherPitchMod =
       1 +
-      0.06 * (sunNorm - 0.5) +
-      0.05 * (tempNorm - 0.5) +
-      0.03 * (pressure - 0.5) +
-      0.02 * (cloudCover - 0.5);
+      0.02 * (sunNorm - 0.5) +
+      0.04 * (tempNorm - 0.5) +
+      0.025 * (pressure - 0.5) +
+      0.015 * (cloudCover - 0.5);
     const baseHz = placeBaseHz * centerTuneRatio * weatherPitchMod;
     const subHz = baseHz / 2;
     const altitudeNorm = clamp((p.altitudeM + 300) / 3600);
 
     const cutoffBase = 200 + 1900 * windNorm + 2100 * Math.pow(1 - y, 1.8);
     const cutoff =
-      cutoffBase * (1 - 0.22 * humidityNorm) * (0.52 + 0.76 * dayness) * (0.95 + 0.1 * altitudeNorm);
-    const filterQ = 0.78 - 0.35 * humidityNorm;
+      cutoffBase *
+      (1 - 0.22 * humidityNorm) *
+      (0.52 + 0.62 * dayness + 0.4 * sunInfluence) *
+      (0.95 + 0.1 * altitudeNorm);
+    const filterQ = 0.76 - 0.34 * humidityNorm - 0.06 * sunInfluence;
     const noiseAmt =
       (0.01 +
         0.18 * windNorm +
@@ -315,15 +324,20 @@ export function useAudioEngine() {
       (0.82 + 0.32 * dayness);
 
     const lfoRate =
-      (0.03 + 0.48 * sunNorm * (0.65 + 0.35 * sunLevel) + 0.45 * Math.pow(1 - y, 1.2)) *
-      (0.64 + 0.64 * dayness);
+      (0.028 +
+        0.36 * sunInfluence +
+        0.22 * sunNorm * (0.7 + 0.3 * sunLevel) +
+        0.2 * moonInfluence * nightFactor +
+        0.4 * Math.pow(1 - y, 1.2)) *
+      (0.62 + 0.52 * dayness + 0.08 * sunInfluence);
     const lfoDepth =
-      (0.016 +
-        0.13 * moonPhase * (0.65 + 0.35 * moonLevel) +
+      (0.012 +
+        0.11 * moonInfluence +
+        0.035 * moonPhase +
         0.05 * pressure +
         0.028 * diffusion +
         0.02 * altitudeNorm) *
-      (0.66 + 0.72 * dayness);
+      (0.52 + 0.38 * dayness + 0.3 * nightFactor);
     const pitchSmoothing = 0.015 + 0.03 * diffusion;
     const toneSmoothing = 0.02 + 0.055 * diffusion;
     const gainSmoothing = 0.03 + 0.045 * wetness;
@@ -358,8 +372,8 @@ export function useAudioEngine() {
     const airToneHz = clamp(airToneBase * dopplerPitchRatio, 160, 1700);
     const airNoiseBandHz = clamp(680 + 1700 * airBrightnessNorm + 260 * airMotionNorm, 500, 3300);
     const airToneBandHz = clamp(airToneHz * (1.05 + 0.35 * airBrightnessNorm), 280, 3900);
-    const airShimmerRate = clamp(0.05 + 0.65 * airMotionNorm, 0.05, 0.8);
-    const airShimmerDepth = clamp(8 + 38 * airMotionNorm + 12 * airTensionNorm, 6, 45);
+    const airShimmerRate = clamp(0.05 + 0.65 * airMotionNorm + 0.08 * moonInfluence * nightFactor, 0.05, 0.85);
+    const airShimmerDepth = clamp(8 + 38 * airMotionNorm + 12 * airTensionNorm + 10 * moonInfluence * nightFactor, 6, 52);
     const airWidth = clamp((airTensionNorm - 0.5) * 1.15, -0.55, 0.55);
     const airPitchSmoothing = 0.08 + 0.09 * diffusion;
     const airToneSmoothing = 0.09 + 0.11 * diffusion;

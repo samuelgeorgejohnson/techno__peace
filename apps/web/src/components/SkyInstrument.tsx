@@ -15,6 +15,14 @@ function clampRange(x: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, x));
 }
 
+function celestialStrengthLabel(value: number) {
+  if (value < 0.2) return "very low";
+  if (value < 0.45) return "low";
+  if (value < 0.75) return "medium";
+  if (value < 1.2) return "strong";
+  return "very strong";
+}
+
 type Pt = { x: number; y: number; pressure: number };
 type Channel = { id: string; name: string; detail: string };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
@@ -138,15 +146,19 @@ export default function SkyInstrument({
   const moonMix = (mixLevels.moon ?? 100) / 100;
   const birdsMix = (mixLevels.birds ?? 100) / 100;
   const chimesMix = (mixLevels.chimes ?? 100) / 100;
-  const moonIllumination =
-    weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2;
+  const moonIllumination = 1 - Math.abs(0.5 - weather.moonPhase) * 2;
   const moonLightFactor = clamp01(moonIllumination);
   const clearSkyFactor = clamp01(1 - weather.cloudCover);
   const nightFactor = clamp01((-weather.sunAltitudeDeg + 6) / 24);
-  const sunRawLive = clamp01((weather.sunAltitudeDeg + 8) / 58) * (weather.isDay ? 1 : 0.2);
-  const moonRawLive = clamp01((0.25 + 0.75 * moonIllumination) * nightFactor);
+  const sunAltitudeFactor = clamp01((weather.sunAltitudeDeg + 6) / 72);
+  const sunRawLive = clamp01((weather.isDay ? 0.1 : 0.03) + sunAltitudeFactor * (weather.isDay ? 0.9 : 0.07));
+  const moonDaySuppression = weather.isDay ? 0.22 : 1;
+  const moonRawLive = clamp01((0.2 + 0.8 * moonIllumination) * nightFactor * moonDaySuppression);
   const effectiveSun = clampRange(sunRawLive * sunMix, 0, 2);
   const effectiveMoon = clampRange(moonRawLive * moonMix, 0, 2);
+  const sunVisualLift = clamp01(effectiveSun / 1.2);
+  const moonVisualLift = clamp01(effectiveMoon / 1.2);
+  const celestialMotionRate = 0.84 + 0.52 * sunVisualLift + 0.18 * moonVisualLift;
   const celestialMix: CelestialMixerState = useMemo(
     () => ({ sun: effectiveSun, moon: effectiveMoon }),
     [effectiveMoon, effectiveSun],
@@ -520,23 +532,10 @@ export default function SkyInstrument({
 
   function channelStatusText(channelId: string) {
     if (channelId === "sun") {
-      if (weather.isDay) {
-        return `Live: altitude ${weather.sunAltitudeDeg.toFixed(0)}° • raw ${Math.round(sunRawLive * 100)}%`;
-      }
-      return `Live: below horizon ${Math.abs(weather.sunAltitudeDeg).toFixed(0)}° • twilight ${Math.round(sunRawLive * 100)}%`;
+      return `sun: ${weather.sunAltitudeDeg.toFixed(0)}° altitude • ${celestialStrengthLabel(effectiveSun)}`;
     }
     if (channelId === "moon") {
-      const phaseLabel =
-        weather.moonPhase < 0.1 || weather.moonPhase > 0.9
-          ? "new moon"
-          : weather.moonPhase < 0.4
-            ? "waxing"
-          : weather.moonPhase < 0.6
-              ? "full moon window"
-              : weather.moonPhase < 0.9
-                ? "waning"
-                : "new moon";
-      return `${weather.isDay ? "Day sky" : "Night sky"} • ${phaseLabel} • raw ${Math.round(moonRawLive * 100)}%`;
+      return `moon: ${Math.round(moonIllumination * 100)}% lit • ${celestialStrengthLabel(effectiveMoon)}`;
     }
     if (channelId === "air") {
       if (manMadeAir.status === "loading" || manMadeAir.status === "idle") {
@@ -593,7 +592,7 @@ export default function SkyInstrument({
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
-        filter: `brightness(${0.44 + sky.brightness * 0.66}) saturate(${0.72 + sky.dayness * 0.4}) contrast(${0.95 + nightness * 0.14})`,
+        filter: `brightness(${0.42 + sky.brightness * (0.62 + sunVisualLift * 0.16)}) saturate(${0.72 + sky.dayness * 0.32 + sunVisualLift * 0.2 + moonVisualLift * 0.08}) contrast(${0.95 + nightness * 0.12 + moonVisualLift * 0.08})`,
         transition: "background 900ms ease, filter 900ms ease",
       }}
     >
@@ -656,8 +655,8 @@ export default function SkyInstrument({
           position: "absolute",
           inset: "-10% -10% -6%",
           pointerEvents: "none",
-          background: `radial-gradient(940px 620px at 50% 64%, rgba(222, 234, 255, ${0.04 + moonLightFactor * 0.24}), rgba(255, 255, 255, 0) 74%)`,
-          opacity: nightness * (0.34 + moonSkyLift * 0.92),
+          background: `radial-gradient(940px 620px at 50% 64%, rgba(214, 228, 255, ${0.035 + moonLightFactor * 0.16 + moonVisualLift * 0.12}), rgba(255, 255, 255, 0) 74%)`,
+          opacity: nightness * (0.22 + moonSkyLift * 0.7 + moonVisualLift * 0.24),
           zIndex: 0,
           mixBlendMode: "soft-light",
         }}
@@ -670,7 +669,7 @@ export default function SkyInstrument({
           pointerEvents: "none",
           zIndex: 0,
           opacity: sky.cloudOpacity,
-          animation: `tp-cloud-drift-a ${Math.max(24, 170 / sky.cloudSpeed)}s linear infinite`,
+          animation: `tp-cloud-drift-a ${Math.max(20, 170 / (sky.cloudSpeed * celestialMotionRate))}s linear infinite`,
           background:
             sky.cloudDensity === "low"
               ? `radial-gradient(800px 360px at 18% 20%, rgba(255,255,255,${cloudAlpha}), transparent 62%), radial-gradient(900px 380px at 78% 36%, rgba(255,255,255,${cloudAlpha * 0.92}), transparent 64%)`
@@ -687,7 +686,7 @@ export default function SkyInstrument({
           pointerEvents: "none",
           zIndex: 0,
           opacity: sky.cloudOpacity * (sky.cloudDensity === "high" ? 0.75 : 0.48),
-          animation: `tp-cloud-drift-b ${Math.max(18, 135 / sky.cloudSpeed)}s linear infinite`,
+          animation: `tp-cloud-drift-b ${Math.max(16, 135 / (sky.cloudSpeed * celestialMotionRate))}s linear infinite`,
           background:
             sky.cloudDensity === "high"
               ? "radial-gradient(1200px 520px at 40% 16%, rgba(240,244,250,0.34), transparent 72%), radial-gradient(1200px 540px at 78% 28%, rgba(240,244,250,0.28), transparent 74%)"
