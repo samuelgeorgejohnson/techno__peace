@@ -129,6 +129,8 @@ export default function SkyInstrument({
   const chimesMix = (mixLevels.chimes ?? 100) / 100;
   const moonIllumination =
     weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2;
+  const moonLightFactor = clamp01(moonIllumination);
+  const clearSkyFactor = clamp01(1 - weather.cloudCover);
   const nightFactor = clamp01((-weather.sunAltitudeDeg + 6) / 24);
   const sunRawLive = clamp01((weather.sunAltitudeDeg + 8) / 58) * (weather.isDay ? 1 : 0.2);
   const moonRawLive = clamp01((0.25 + 0.75 * moonIllumination) * nightFactor);
@@ -196,10 +198,13 @@ export default function SkyInstrument({
         cloudCover: weather.cloudCover,
         windMps: weather.windMps,
         isDay: weather.isDay,
+        moonIllumination,
       }),
-    [weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
+    [moonIllumination, weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
   );
   const nightness = 1 - sky.dayness;
+  const moonSkyLift = clamp01(moonLightFactor * clearSkyFactor);
+  const starVisibility = clamp01((0.15 + nightness * 1.1) * clearSkyFactor * (0.35 + moonSkyLift * 0.9));
   const cloudAlpha = 0.06 + sky.dayness * 0.18;
   const cloudAlphaDense = 0.18 + sky.dayness * 0.38;
 
@@ -452,7 +457,7 @@ export default function SkyInstrument({
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,
-        filter: `brightness(${0.34 + sky.brightness * 0.72}) saturate(${0.68 + sky.dayness * 0.4}) contrast(${0.95 + nightness * 0.16})`,
+        filter: `brightness(${0.44 + sky.brightness * 0.66}) saturate(${0.72 + sky.dayness * 0.4}) contrast(${0.95 + nightness * 0.14})`,
         transition: "background 900ms ease, filter 900ms ease",
       }}
     >
@@ -464,10 +469,23 @@ export default function SkyInstrument({
         aria-hidden="true"
         style={{
           position: "absolute",
+          inset: "-6%",
+          pointerEvents: "none",
+          background:
+            "radial-gradient(1.5px 1.5px at 16% 28%, rgba(236,242,255,0.88), rgba(236,242,255,0) 70%), radial-gradient(1.4px 1.4px at 34% 14%, rgba(223,234,255,0.86), rgba(223,234,255,0) 70%), radial-gradient(1.3px 1.3px at 58% 22%, rgba(226,236,255,0.82), rgba(226,236,255,0) 70%), radial-gradient(1.6px 1.6px at 76% 18%, rgba(246,248,255,0.9), rgba(246,248,255,0) 70%), radial-gradient(1.3px 1.3px at 88% 32%, rgba(224,236,255,0.84), rgba(224,236,255,0) 70%), radial-gradient(1.4px 1.4px at 14% 62%, rgba(230,238,255,0.8), rgba(230,238,255,0) 72%), radial-gradient(1.5px 1.5px at 42% 54%, rgba(240,244,255,0.88), rgba(240,244,255,0) 72%), radial-gradient(1.2px 1.2px at 68% 64%, rgba(220,232,255,0.78), rgba(220,232,255,0) 72%), radial-gradient(1.6px 1.6px at 82% 56%, rgba(245,247,255,0.86), rgba(245,247,255,0) 72%), radial-gradient(1.2px 1.2px at 24% 78%, rgba(212,227,255,0.74), rgba(212,227,255,0) 72%), radial-gradient(1.3px 1.3px at 62% 82%, rgba(232,240,255,0.78), rgba(232,240,255,0) 72%), radial-gradient(1.5px 1.5px at 90% 76%, rgba(238,244,255,0.84), rgba(238,244,255,0) 72%)",
+          opacity: starVisibility * (sky.phase === "civil-twilight" ? 0.55 : 0.9),
+          zIndex: 0,
+          mixBlendMode: "screen",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
           inset: "-8%",
           pointerEvents: "none",
           background: "radial-gradient(1200px 740px at 50% 52%, rgba(0, 0, 0, 0), rgba(0, 4, 16, 0.55) 72%, rgba(0, 0, 0, 0.86) 100%)",
-          opacity: nightness * 0.72,
+          opacity: nightness * 0.62,
           zIndex: 0,
           mixBlendMode: "multiply",
         }}
@@ -502,8 +520,8 @@ export default function SkyInstrument({
           position: "absolute",
           inset: "-10% -10% -6%",
           pointerEvents: "none",
-          background: `radial-gradient(940px 620px at 50% 64%, rgba(255, 255, 255, ${0.02 + weather.moonPhase * 0.24}), rgba(255, 255, 255, 0) 74%)`,
-          opacity: nightness * (0.4 + weather.moonPhase * 0.9),
+          background: `radial-gradient(940px 620px at 50% 64%, rgba(222, 234, 255, ${0.04 + moonLightFactor * 0.24}), rgba(255, 255, 255, 0) 74%)`,
+          opacity: nightness * (0.34 + moonSkyLift * 0.92),
           zIndex: 0,
           mixBlendMode: "soft-light",
         }}
@@ -655,6 +673,10 @@ export default function SkyInstrument({
               lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
             </div>
             <div>weather: {weather.status}</div>
+            <div>
+              moon illum/factor: {Math.round(moonIllumination * 100)}% / {Math.round(moonLightFactor * 100)}%
+            </div>
+            <div>sky clear factor: {Math.round(clearSkyFactor * 100)}% • star vis: {Math.round(starVisibility * 100)}%</div>
             <div>F₀ base: {placeBaseHz.toFixed(1)} Hz</div>
             <div>tonic now: {currentTonicHz.toFixed(1)} Hz</div>
             <div>wind raw/effective: {Math.round(rawWind * 100)}% / {Math.round(effectiveWind * 100)}%</div>
