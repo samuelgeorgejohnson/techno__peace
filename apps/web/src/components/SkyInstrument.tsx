@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-data/types/CelestialSignals";
 import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
 import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
@@ -10,6 +10,9 @@ import SplashIntro from "./SplashIntro";
 
 function clamp01(x: number) {
   return Math.max(0, Math.min(1, x));
+}
+function clampRange(x: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, x));
 }
 
 type Pt = { x: number; y: number; pressure: number };
@@ -105,6 +108,7 @@ export default function SkyInstrument({
   const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
+  const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
@@ -123,9 +127,16 @@ export default function SkyInstrument({
   const moonMix = (mixLevels.moon ?? 100) / 100;
   const birdsMix = (mixLevels.birds ?? 100) / 100;
   const chimesMix = (mixLevels.chimes ?? 100) / 100;
+  const moonIllumination =
+    weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2;
+  const nightFactor = clamp01((-weather.sunAltitudeDeg + 6) / 24);
+  const sunRawLive = clamp01((weather.sunAltitudeDeg + 8) / 58) * (weather.isDay ? 1 : 0.2);
+  const moonRawLive = clamp01((0.25 + 0.75 * moonIllumination) * nightFactor);
+  const effectiveSun = clampRange(sunRawLive * sunMix, 0, 2);
+  const effectiveMoon = clampRange(moonRawLive * moonMix, 0, 2);
   const celestialMix: CelestialMixerState = useMemo(
-    () => ({ sun: sunMix, moon: moonMix }),
-    [moonMix, sunMix],
+    () => ({ sun: effectiveSun, moon: effectiveMoon }),
+    [effectiveMoon, effectiveSun],
   );
   const manMadeMix: ManMadeMixerState = useMemo(
     () => ({
@@ -148,10 +159,10 @@ export default function SkyInstrument({
         isDay: weather.isDay,
         normalized: {
           presence: clamp01((weather.sunAltitudeDeg + 15) / 105),
-          motion: sunMix,
+          motion: effectiveSun,
           brightness: weather.isDay ? 1 : 0.18,
           spatialBias: 0,
-          modulationDepth: sunMix,
+          modulationDepth: effectiveSun,
           tension: clamp01(1 - weather.cloudCover),
         },
       },
@@ -160,18 +171,18 @@ export default function SkyInstrument({
         azimuthDeg: 0,
         phase: weather.moonPhase,
         visible: !weather.isDay,
-        illumination: weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2,
+        illumination: moonIllumination,
         normalized: {
-          presence: clamp01((90 - weather.sunAltitudeDeg) / 180),
-          motion: moonMix,
+          presence: moonRawLive,
+          motion: effectiveMoon,
           brightness: clamp01(1 - weather.sunAltitudeDeg / 120),
           spatialBias: 0,
-          modulationDepth: moonMix,
-          tension: clamp01(weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2),
+          modulationDepth: effectiveMoon,
+          tension: clamp01(moonIllumination),
         },
       },
     }),
-    [moonMix, sunMix, weather.cloudCover, weather.isDay, weather.moonPhase, weather.sunAltitudeDeg],
+    [effectiveMoon, effectiveSun, moonIllumination, moonRawLive, weather.cloudCover, weather.isDay, weather.moonPhase, weather.sunAltitudeDeg],
   );
   const placeBaseHz = useMemo(
     () => derivePlaceBaseFrequency(weather.latitude, weather.longitude),
@@ -196,7 +207,7 @@ export default function SkyInstrument({
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
 
-  function audioParams(nextPt: Pt): AudioEngineSignalPayload {
+  const audioParams = useCallback((nextPt: Pt): AudioEngineSignalPayload => {
     return {
       ...nextPt,
       latitude: weather.latitude,
@@ -213,19 +224,34 @@ export default function SkyInstrument({
       precipitationMm: weather.precipitationMm,
       dailyRainMm: weather.dailyRainMm,
       showersMm: 0,
-      sunLevel: celestialMix.sun ?? 1,
-      moonLevel: celestialMix.moon ?? 1,
+      sunLevel: effectiveSun,
+      moonLevel: effectiveMoon,
       birdsLevel: birdsMix,
       chimesLevel: chimesMix,
       airMix: manMadeMix.air ?? 1,
       air: manMadeAir.air,
     };
-  }
+  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
     update(audioParams(pt));
-  }, [birdsMix, celestialMix.moon, celestialMix.sun, chimesMix, effectiveHumidity, effectiveRain, effectiveWind, isRunning, manMadeAir.air, manMadeMix.air, pt, update, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [audioParams, isRunning, pt, update]);
+
+  useEffect(() => {
+    latestPointRef.current = pt;
+  }, [pt]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    let raf = 0;
+    const tick = () => {
+      update(audioParams(latestPointRef.current));
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [audioParams, isRunning, update]);
 
   useEffect(
     () => () => {
@@ -345,6 +371,8 @@ export default function SkyInstrument({
     if (channelId === "humidity") return Math.round(effectiveHumidity * 100);
     if (channelId === "sun") return Math.round((celestialMix.sun ?? 1) * 100);
     if (channelId === "moon") return Math.round((celestialMix.moon ?? 1) * 100);
+    if (channelId === "birds") return Math.round(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) * 100);
+    if (channelId === "chimes") return Math.round(clampRange((0.35 + 0.65 * nightFactor) * chimesMix, 0, 2) * 100);
     if (channelId === "air") return Math.round((manMadeAir.air?.normalized.density ?? 0) * 100);
     return mixLevels[channelId] ?? 100;
   }
@@ -352,9 +380,9 @@ export default function SkyInstrument({
   function channelStatusText(channelId: string) {
     if (channelId === "sun") {
       if (weather.isDay) {
-        return `Live: day • altitude ${weather.sunAltitudeDeg.toFixed(0)}°`;
+        return `Live: altitude ${weather.sunAltitudeDeg.toFixed(0)}° • raw ${Math.round(sunRawLive * 100)}%`;
       }
-      return `Live: below horizon ${Math.abs(weather.sunAltitudeDeg).toFixed(0)}°`;
+      return `Live: below horizon ${Math.abs(weather.sunAltitudeDeg).toFixed(0)}° • twilight ${Math.round(sunRawLive * 100)}%`;
     }
     if (channelId === "moon") {
       const phaseLabel =
@@ -367,14 +395,14 @@ export default function SkyInstrument({
               : weather.moonPhase < 0.9
                 ? "waning"
                 : "new moon";
-      return `${weather.isDay ? "Day sky" : "Night sky"} • ${phaseLabel}`;
+      return `${weather.isDay ? "Day sky" : "Night sky"} • ${phaseLabel} • raw ${Math.round(moonRawLive * 100)}%`;
     }
     if (channelId === "air") {
       if (manMadeAir.status === "loading" || manMadeAir.status === "idle") {
-        return "Loading air traffic…";
+        return "Live feed starting…";
       }
       if (!manMadeAir.air || manMadeAir.status === "unavailable") {
-        return "Air: unavailable • no air data";
+        return "Manual texture • Air live data coming soon";
       }
       if (manMadeAir.air.count <= 0) {
         return "Air: live • no nearby aircraft";
@@ -396,12 +424,15 @@ export default function SkyInstrument({
       return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
     }
     if (channelId === "birds") {
-      return weather.isDay ? "Live: daytime chirps active" : "Live: birds settle after dark";
+      return weather.isDay ? "Live: daytime chirps • dawn boosted" : "Live: reduced at night";
     }
     if (channelId === "chimes") {
-      return weather.isDay ? "Live: soft daytime shimmer" : "Live: night air chimes";
+      return weather.isDay ? "Live: sparse wind chimes" : "Live: sparse night bell tones";
     }
-    return "Live: linked to current place signal";
+    if (channelId === "train" || channelId === "traffic" || channelId === "harbor") {
+      return "Manual texture • Not Live";
+    }
+    return "Manual texture";
   }
 
   return (
