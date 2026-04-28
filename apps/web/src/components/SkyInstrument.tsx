@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-data/types/CelestialSignals";
-import type { ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
+import type { AirSignal, ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
 import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
@@ -13,6 +13,54 @@ function clamp01(x: number) {
 }
 function clampRange(x: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, x));
+}
+
+function fractional(value: number) {
+  return value - Math.floor(value);
+}
+
+function hashNoise(lat: number, lon: number, seed: number) {
+  return fractional(Math.sin((lat + 90) * 11.731 + (lon + 180) * 73.192 + seed * 19.33) * 43758.5453);
+}
+
+function toQualitative(value: number, labels: [string, string, string]) {
+  if (value < 0.33) return labels[0];
+  if (value < 0.66) return labels[1];
+  return labels[2];
+}
+
+function buildProceduralAirSignal(lat: number, lon: number, isDay: boolean): AirSignal {
+  const now = Date.now();
+  const phaseSlow = now / (1000 * 60 * 17);
+  const phaseMid = now / (1000 * 60 * 9);
+  const seedA = hashNoise(lat, lon, 0.7);
+  const seedB = hashNoise(lat, lon, 2.3);
+  const urbanBias = clamp01(0.24 + 0.26 * (1 - Math.abs(lat) / 90) + 0.16 * Math.abs(Math.sin((lon * Math.PI) / 180)));
+  const dayLift = isDay ? 1 : 0;
+  const densityBase = isDay ? 0.2 : 0.05;
+  const densitySpan = isDay ? 0.42 : 0.16;
+  const drift = (Math.sin(phaseSlow + seedA * Math.PI * 2) + 1) / 2;
+  const motionDrift = (Math.sin(phaseMid + seedB * Math.PI * 2) + 1) / 2;
+  const density = clamp01(densityBase + densitySpan * (0.45 * urbanBias + 0.35 * drift + 0.2 * dayLift));
+  const proximity = clamp01(0.08 + 0.6 * urbanBias + 0.22 * motionDrift);
+  const motion = clamp01(0.15 + 0.5 * dayLift + 0.25 * drift + 0.1 * motionDrift);
+  const nearbyCount = Math.max(0, Math.round(density * (2 + 8 * urbanBias + 5 * dayLift)));
+
+  return {
+    count: nearbyCount,
+    nearestDistanceKm: Math.max(2, (1 - proximity) * 42),
+    avgAltitudeM: 2200 + 6200 * density,
+    avgVelocityMps: 145 + 85 * motion,
+    headingSpread: 24 + 130 * motion,
+    normalized: {
+      density,
+      proximity,
+      motion,
+      tension: clamp01(0.25 + 0.4 * motion + 0.2 * density),
+      brightness: clamp01(0.24 + 0.56 * density + 0.2 * dayLift),
+      pulseRate: 0.45 + density * 1.6,
+    },
+  };
 }
 
 type Pt = { x: number; y: number; pressure: number };
@@ -224,13 +272,15 @@ export default function SkyInstrument({
       : weather.status === "fallback"
         ? "fallback"
         : "unavailable";
-  const manMadeSourceStatus: DiagnosticSourceStatus =
-    manMadeAir.status === "live" ? "live" : manMadeAir.status === "unavailable" ? "unavailable" : "fallback";
+  const resolvedAirSignal = useMemo(
+    () => manMadeAir.air ?? buildProceduralAirSignal(weather.latitude, weather.longitude, weather.isDay),
+    [manMadeAir.air, weather.isDay, weather.latitude, weather.longitude],
+  );
+  const manMadeSourceStatus: DiagnosticSourceStatus = manMadeAir.status === "live" ? "live" : "fallback";
 
   const diagnosticsRows: DiagnosticRow[] = useMemo(() => {
     const fmtPercent = (value: number) => `${Math.round(value * 100)}%`;
     const fmtNumber = (value: number, digits = 2) => value.toFixed(digits);
-    const unavailable = "unavailable";
     const rows: DiagnosticRow[] = [
       {
         category: "Weather values",
@@ -280,18 +330,18 @@ export default function SkyInstrument({
       {
         category: "Man-made air values",
         label: "Aircraft density",
-        raw: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.density) : unavailable,
+        raw: fmtPercent(resolvedAirSignal.normalized.density),
         userControl: fmtPercent(manMadeMix.air ?? 1),
-        effective: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.density * (manMadeMix.air ?? 1)) : unavailable,
+        effective: fmtPercent(resolvedAirSignal.normalized.density * (manMadeMix.air ?? 1)),
         source: manMadeSourceStatus,
         note: "live aircraft density from signal path with air slider mix",
       },
       {
         category: "Man-made air values",
         label: "Aircraft proximity",
-        raw: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.proximity) : unavailable,
+        raw: fmtPercent(resolvedAirSignal.normalized.proximity),
         userControl: fmtPercent(manMadeMix.air ?? 1),
-        effective: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.proximity * (manMadeMix.air ?? 1)) : unavailable,
+        effective: fmtPercent(resolvedAirSignal.normalized.proximity * (manMadeMix.air ?? 1)),
         source: manMadeSourceStatus,
         note: "nearby aircraft presence used for air tone/noise drive",
       },
@@ -342,7 +392,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -370,9 +420,9 @@ export default function SkyInstrument({
       birdsLevel: birdsMix,
       chimesLevel: chimesMix,
       airMix: manMadeMix.air ?? 1,
-      air: manMadeAir.air,
+      air: resolvedAirSignal,
     };
-  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeMix.air, resolvedAirSignal, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -514,7 +564,7 @@ export default function SkyInstrument({
     if (channelId === "moon") return Math.round((celestialMix.moon ?? 1) * 100);
     if (channelId === "birds") return Math.round(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) * 100);
     if (channelId === "chimes") return Math.round(clampRange((0.35 + 0.65 * nightFactor) * chimesMix, 0, 2) * 100);
-    if (channelId === "air") return Math.round((manMadeAir.air?.normalized.density ?? 0) * 100);
+    if (channelId === "air") return Math.round(resolvedAirSignal.normalized.density * 100);
     return mixLevels[channelId] ?? 100;
   }
 
@@ -540,29 +590,26 @@ export default function SkyInstrument({
     }
     if (channelId === "air") {
       if (manMadeAir.status === "loading" || manMadeAir.status === "idle") {
-        return "Live feed starting…";
+        return "Air: procedural blend warming up";
       }
-      if (!manMadeAir.air || manMadeAir.status === "unavailable") {
-        return "Manual texture • Air live data coming soon";
-      }
-      if (manMadeAir.air.count <= 0) {
-        return "Air: live • no nearby aircraft";
+      if (resolvedAirSignal.count <= 0) {
+        return `Air: ${manMadeAir.status === "live" ? "live" : "procedural"} • low activity`;
       }
 
       const nearestDistance =
-        typeof manMadeAir.air.nearestDistanceKm === "number"
-          ? `${manMadeAir.air.nearestDistanceKm.toFixed(1)}km nearest`
+        typeof resolvedAirSignal.nearestDistanceKm === "number"
+          ? `${resolvedAirSignal.nearestDistanceKm.toFixed(1)}km nearest`
           : "no nearby aircraft";
       const avgVelocity =
-        typeof manMadeAir.air.avgVelocityMps === "number"
-          ? `${Math.round(manMadeAir.air.avgVelocityMps)}m/s avg`
+        typeof resolvedAirSignal.avgVelocityMps === "number"
+          ? `${Math.round(resolvedAirSignal.avgVelocityMps)}m/s avg`
           : "velocity n/a";
       const doppler =
-        typeof manMadeAir.air.dopplerCents === "number"
-          ? `${manMadeAir.air.dopplerCents >= 0 ? "+" : ""}${manMadeAir.air.dopplerCents.toFixed(1)}c doppler`
+        typeof resolvedAirSignal.dopplerCents === "number"
+          ? `${resolvedAirSignal.dopplerCents >= 0 ? "+" : ""}${resolvedAirSignal.dopplerCents.toFixed(1)}c doppler`
           : "doppler n/a";
 
-      return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
+      return `${manMadeAir.status === "live" ? "Live" : "Procedural"}: ${resolvedAirSignal.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
     }
     if (channelId === "birds") {
       return weather.isDay ? "Live: daytime chirps • dawn boosted" : "Live: reduced at night";
@@ -851,8 +898,7 @@ export default function SkyInstrument({
             <div>celestial: sun {Math.round((celestialSignals.sun?.normalized.motion ?? 1) * 100)}% moon {Math.round((celestialSignals.moon?.normalized.motion ?? 1) * 100)}%</div>
             <div>man-made: road {Math.round((manMadeMix.road ?? 1) * 100)}% subway {Math.round((manMadeMix.subway ?? 1) * 100)}%</div>
             <div>
-              air: {manMadeAir.air?.count ?? 0} nearby • density {Math.round((manMadeAir.air?.normalized.density ?? 0) * 100)}% •
-              proximity {Math.round((manMadeAir.air?.normalized.proximity ?? 0) * 100)}% • motion {Math.round((manMadeAir.air?.normalized.motion ?? 0) * 100)}%
+              air: {resolvedAirSignal.count} nearby • density {toQualitative(resolvedAirSignal.normalized.density, ["low", "medium", "high"])} • motion {toQualitative(resolvedAirSignal.normalized.motion, ["steady", "active", "busy"])}
             </div>
           </>
         )}

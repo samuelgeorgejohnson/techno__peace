@@ -59,6 +59,8 @@ export function useAudioEngine() {
   const nextDaylifeEventRef = useRef(0);
   const chimeActivityRef = useRef(0);
   const nextChimeEventRef = useRef(0);
+  const airPanDriftRef = useRef(0);
+  const nextAirPassEventRef = useRef(0);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -91,6 +93,8 @@ export function useAudioEngine() {
     nextDaylifeEventRef.current = 0;
     chimeActivityRef.current = 0;
     nextChimeEventRef.current = 0;
+    airPanDriftRef.current = 0;
+    nextAirPassEventRef.current = 0;
     startedRef.current = false;
   }
 
@@ -329,6 +333,7 @@ export function useAudioEngine() {
     const gainSmoothing = 0.03 + 0.045 * wetness;
     const manMadeAir = p.air;
     const airMix = clamp(p.airMix ?? 1);
+    const airDensityNorm = clamp(manMadeAir?.normalized.density ?? (manMadeAir ? manMadeAir.count / 28 : 0));
     const airPresenceNorm = clamp(
       manMadeAir?.normalized.proximity ??
         (manMadeAir?.nearestDistanceKm ? 1 / (1 + manMadeAir.nearestDistanceKm / 30) : 0),
@@ -358,9 +363,14 @@ export function useAudioEngine() {
     const airToneHz = clamp(airToneBase * dopplerPitchRatio, 160, 1700);
     const airNoiseBandHz = clamp(680 + 1700 * airBrightnessNorm + 260 * airMotionNorm, 500, 3300);
     const airToneBandHz = clamp(airToneHz * (1.05 + 0.35 * airBrightnessNorm), 280, 3900);
+    const now = ctx.currentTime;
     const airShimmerRate = clamp(0.05 + 0.65 * airMotionNorm, 0.05, 0.8);
     const airShimmerDepth = clamp(8 + 38 * airMotionNorm + 12 * airTensionNorm, 6, 45);
-    const airWidth = clamp((airTensionNorm - 0.5) * 1.15, -0.55, 0.55);
+    const airPanTarget = clamp((Math.sin(now * (0.08 + 0.22 * airMotionNorm)) + airPanDriftRef.current * 0.65) * (0.1 + 0.6 * airDensityNorm), -0.92, 0.92);
+    airPanDriftRef.current += (airPanTarget - airPanDriftRef.current) * 0.04;
+    const airWidth = clamp(airPanDriftRef.current, -0.9, 0.9);
+    const airNoiseWidthQ = clamp(0.86 + 0.8 * airDensityNorm + 0.4 * airMotionNorm, 0.9, 2.3);
+    const airMotionFilterDriftHz = clamp(airNoiseBandHz * (0.9 + 0.16 * Math.sin(now * (0.06 + 0.22 * airMotionNorm))), 450, 3600);
     const airPitchSmoothing = 0.08 + 0.09 * diffusion;
     const airToneSmoothing = 0.09 + 0.11 * diffusion;
     const airGainSmoothing = 0.12 + 0.08 * wetness;
@@ -390,8 +400,6 @@ export function useAudioEngine() {
     const chimeDensityPerSec = clamp((0.01 + 0.18 * chimeActivity) * (0.2 + 0.85 * chimesLevel), 0, 0.26);
     const chimeBrightness = clamp(1700 + 2200 * (1 - cloudCover) + 500 * (1 - precipNorm), 1500, 4200);
     const chimeOutput = clamp((0.00003 + 0.0024 * chimeActivity * rainChimeSuppression) * chimesLevel, 0, 0.0042);
-
-    const now = ctx.currentTime;
 
     // 🌧️ rain droplets (random ticks)
     if (rainNorm > 0.02 && Math.random() < rainNorm * 0.3) {
@@ -470,6 +478,40 @@ export function useAudioEngine() {
       nextChimeEventRef.current = now + intervalBase * (0.85 + Math.random() * 0.45);
     }
 
+    if (
+      now >= nextAirPassEventRef.current &&
+      airPresence > 0.05 &&
+      airMix > 0.001 &&
+      airToneFilterRef.current &&
+      airPannerRef.current
+    ) {
+      const passTone = ctx.createOscillator();
+      const passGain = ctx.createGain();
+      passTone.type = "sine";
+      const passHz = clamp(1300 + 2200 * airPresence + 500 * airMotionNorm, 1200, 4200);
+      const passDur = 0.32 + 0.5 * airMotionNorm;
+      const passAmp = clamp(0.00004 + 0.0012 * airPresence * (0.6 + 0.4 * airDensityNorm), 0.00003, 0.0011) * airMix;
+      passTone.frequency.setValueAtTime(passHz, now);
+      passTone.frequency.exponentialRampToValueAtTime(passHz * (0.88 + 0.2 * Math.random()), now + passDur);
+      passGain.gain.setValueAtTime(0.000001, now);
+      passGain.gain.exponentialRampToValueAtTime(passAmp, now + 0.05);
+      passGain.gain.exponentialRampToValueAtTime(0.000001, now + passDur);
+      passTone.connect(passGain);
+      passGain.connect(airToneFilterRef.current);
+      passTone.start(now);
+      passTone.stop(now + passDur + 0.03);
+
+      const passPan = clamp((Math.random() * 2 - 1) * (0.28 + 0.66 * airPresence), -0.94, 0.94);
+      airPannerRef.current.pan.cancelScheduledValues(now);
+      airPannerRef.current.pan.setValueAtTime(airWidth * 0.4, now);
+      airPannerRef.current.pan.linearRampToValueAtTime(passPan, now + passDur * 0.45);
+      airPannerRef.current.pan.linearRampToValueAtTime(airWidth, now + passDur + 0.12);
+
+      nextAirPassEventRef.current = now + (6.5 - 5.3 * airPresence) * (0.82 + Math.random() * 0.45);
+    } else if (now >= nextAirPassEventRef.current) {
+      nextAirPassEventRef.current = now + 3.2;
+    }
+
     oscRef.current?.frequency.setTargetAtTime(baseHz, now, pitchSmoothing);
     subRef.current?.frequency.setTargetAtTime(subHz, now, pitchSmoothing + 0.01);
     filterRef.current?.frequency.setTargetAtTime(cutoff, now, toneSmoothing);
@@ -480,8 +522,8 @@ export function useAudioEngine() {
     airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, airGainSmoothing);
     airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, airGainSmoothing);
     airBusGainRef.current?.gain.setTargetAtTime(airActiveGate * airMix, now, 0.16);
-    airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBandHz, now, airToneSmoothing);
-    airNoiseFilterRef.current?.Q.setTargetAtTime(0.95 + 0.9 * airTensionNorm, now, airToneSmoothing);
+    airNoiseFilterRef.current?.frequency.setTargetAtTime(airMotionFilterDriftHz, now, airToneSmoothing);
+    airNoiseFilterRef.current?.Q.setTargetAtTime(airNoiseWidthQ, now, airToneSmoothing);
     airToneFilterRef.current?.frequency.setTargetAtTime(airToneBandHz, now, airToneSmoothing);
     airToneFilterRef.current?.Q.setTargetAtTime(3.2 + 1.5 * airTensionNorm, now, airToneSmoothing);
     airToneRef.current?.frequency.setTargetAtTime(airToneHz, now, airPitchSmoothing);
