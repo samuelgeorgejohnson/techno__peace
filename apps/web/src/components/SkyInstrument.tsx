@@ -18,6 +18,16 @@ function clampRange(x: number, lo: number, hi: number) {
 type Pt = { x: number; y: number; pressure: number };
 type Channel = { id: string; name: string; detail: string };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
+type DiagnosticSourceStatus = "live" | "fallback" | "unavailable" | "user-controlled";
+type DiagnosticRow = {
+  category: string;
+  label: string;
+  raw: string;
+  userControl: string;
+  effective: string;
+  source: DiagnosticSourceStatus;
+  note: string;
+};
 
 const initialMixerPages: MixerPage[] = [
   {
@@ -108,6 +118,7 @@ export default function SkyInstrument({
   const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -207,6 +218,131 @@ export default function SkyInstrument({
   const starVisibility = clamp01((0.15 + nightness * 1.1) * clearSkyFactor * (0.35 + moonSkyLift * 0.9));
   const cloudAlpha = 0.06 + sky.dayness * 0.18;
   const cloudAlphaDense = 0.18 + sky.dayness * 0.38;
+  const weatherSourceStatus: DiagnosticSourceStatus =
+    weather.status === "live"
+      ? "live"
+      : weather.status === "fallback"
+        ? "fallback"
+        : "unavailable";
+  const manMadeSourceStatus: DiagnosticSourceStatus =
+    manMadeAir.status === "live" ? "live" : manMadeAir.status === "unavailable" ? "unavailable" : "fallback";
+
+  const diagnosticsRows: DiagnosticRow[] = useMemo(() => {
+    const fmtPercent = (value: number) => `${Math.round(value * 100)}%`;
+    const fmtNumber = (value: number, digits = 2) => value.toFixed(digits);
+    const unavailable = "unavailable";
+    const rows: DiagnosticRow[] = [
+      {
+        category: "Weather values",
+        label: "Wind",
+        raw: `${fmtNumber(weather.windMps, 2)} m/s`,
+        userControl: fmtPercent(windMix),
+        effective: `${fmtNumber(effectiveWind * 20, 2)} m/s`,
+        source: weatherSourceStatus,
+        note: "raw weather wind × mixer wind sent to audio payload",
+      },
+      {
+        category: "Weather values",
+        label: "Rain",
+        raw: `${fmtNumber(weather.rainMm + weather.showersMm, 2)} mm`,
+        userControl: fmtPercent(rainMix),
+        effective: `${fmtNumber(effectiveRain * 5, 2)} mm`,
+        source: weatherSourceStatus,
+        note: "rain + showers scaled by mixer rain",
+      },
+      {
+        category: "Weather values",
+        label: "Humidity",
+        raw: `${fmtNumber(weather.humidityPct, 1)}%`,
+        userControl: fmtPercent(humidityMix),
+        effective: `${fmtNumber(effectiveHumidity * 100, 1)}%`,
+        source: weatherSourceStatus,
+        note: "relative humidity scaled by humidity mixer",
+      },
+      {
+        category: "Celestial values",
+        label: "Sun modulation",
+        raw: fmtPercent(sunRawLive),
+        userControl: fmtPercent(sunMix),
+        effective: fmtPercent(effectiveSun / 2),
+        source: weatherSourceStatus,
+        note: "sun altitude day-state mapped then scaled by sun slider",
+      },
+      {
+        category: "Celestial values",
+        label: "Moon modulation",
+        raw: fmtPercent(moonRawLive),
+        userControl: fmtPercent(moonMix),
+        effective: fmtPercent(effectiveMoon / 2),
+        source: weatherSourceStatus,
+        note: "moon illumination/night factor mapped then scaled by moon slider",
+      },
+      {
+        category: "Man-made air values",
+        label: "Aircraft density",
+        raw: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.density) : unavailable,
+        userControl: fmtPercent(manMadeMix.air ?? 1),
+        effective: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.density * (manMadeMix.air ?? 1)) : unavailable,
+        source: manMadeSourceStatus,
+        note: "live aircraft density from signal path with air slider mix",
+      },
+      {
+        category: "Man-made air values",
+        label: "Aircraft proximity",
+        raw: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.proximity) : unavailable,
+        userControl: fmtPercent(manMadeMix.air ?? 1),
+        effective: manMadeAir.air ? fmtPercent(manMadeAir.air.normalized.proximity * (manMadeMix.air ?? 1)) : unavailable,
+        source: manMadeSourceStatus,
+        note: "nearby aircraft presence used for air tone/noise drive",
+      },
+      {
+        category: "Mixer levels",
+        label: "Birds slider",
+        raw: fmtPercent(weather.isDay ? 1 : 0.2),
+        userControl: fmtPercent(birdsMix),
+        effective: fmtPercent(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) / 2),
+        source: "user-controlled",
+        note: "day/night bird gate multiplied by birds slider",
+      },
+      {
+        category: "Mixer levels",
+        label: "Chimes slider",
+        raw: fmtPercent(0.35 + 0.65 * nightFactor),
+        userControl: fmtPercent(chimesMix),
+        effective: fmtPercent(clampRange((0.35 + 0.65 * nightFactor) * chimesMix, 0, 2) / 2),
+        source: "user-controlled",
+        note: "night lift multiplied by chimes slider",
+      },
+      {
+        category: "Mixer levels",
+        label: "Traffic / Train / Harbor",
+        raw: "manual",
+        userControl: `${Math.round((manMadeMix.road ?? 1) * 100)} / ${Math.round((manMadeMix.subway ?? 1) * 100)} / ${Math.round((manMadeMix.bus ?? 1) * 100)}%`,
+        effective: "manual",
+        source: "user-controlled",
+        note: "man-made mixer controls preserved as user channels",
+      },
+      {
+        category: "Final audio modulation values",
+        label: "Payload windMps / rainMm / humidityPct",
+        raw: `${fmtNumber(weather.windMps, 2)} / ${fmtNumber(weather.rainMm + weather.showersMm, 2)} / ${fmtNumber(weather.humidityPct, 1)}`,
+        userControl: `${Math.round(windMix * 100)} / ${Math.round(rainMix * 100)} / ${Math.round(humidityMix * 100)}%`,
+        effective: `${fmtNumber(effectiveWind * 20, 2)} / ${fmtNumber(effectiveRain * 5, 2)} / ${fmtNumber(effectiveHumidity * 100, 1)}`,
+        source: weatherSourceStatus,
+        note: "exact values sent via audio payload on update()",
+      },
+      {
+        category: "Final audio modulation values",
+        label: "Payload sunLevel / moonLevel / tonicHz",
+        raw: `${fmtPercent(sunRawLive)} / ${fmtPercent(moonRawLive)} / ${fmtNumber(placeBaseHz, 1)} Hz`,
+        userControl: `${Math.round(sunMix * 100)} / ${Math.round(moonMix * 100)} / x,y,pointer`,
+        effective: `${fmtNumber(effectiveSun, 3)} / ${fmtNumber(effectiveMoon, 3)} / ${fmtNumber(currentTonicHz, 1)} Hz`,
+        source: weatherSourceStatus,
+        note: "celestial mix and touch position drive final pitch + modulation",
+      },
+    ];
+    return rows;
+  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -645,6 +781,34 @@ export default function SkyInstrument({
             Mixer
           </span>
         </button>
+        <button
+          type="button"
+          onPointerDown={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onClick={(e) => {
+            e.stopPropagation();
+            setDiagnosticsOpen((open) => !open);
+          }}
+          aria-label={diagnosticsOpen ? "Close diagnostics" : "Open diagnostics"}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.14)",
+            background: diagnosticsOpen ? "rgba(95, 220, 205, 0.22)" : "rgba(255,255,255,0.06)",
+            color: "rgba(255,255,255,0.94)",
+            cursor: "pointer",
+            fontSize: isCompactHud ? 11 : 12,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+          }}
+        >
+          Diagnostics
+        </button>
         {!isCompactHud && (
           <>
             <div style={{ opacity: 0.9 }}>{locationText}</div>
@@ -693,6 +857,68 @@ export default function SkyInstrument({
           </>
         )}
       </div>
+      {diagnosticsOpen && (
+        <div
+          onPointerDown={stopMixerEvent}
+          onPointerMove={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onPointerCancel={stopMixerEvent}
+          onClick={stopMixerEvent}
+          style={{
+            position: "absolute",
+            top: isCompactHud ? 164 : 252,
+            left: 16,
+            zIndex: 7,
+            width: "min(980px, calc(100vw - 32px))",
+            maxHeight: "min(62vh, 560px)",
+            overflow: "auto",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(4, 8, 20, 0.84)",
+            backdropFilter: "blur(12px)",
+            padding: 12,
+          }}
+        >
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: "rgba(255,255,255,0.92)" }}>
+            <thead>
+              <tr>
+                {["Category", "Label", "Raw", "User", "Effective", "Source", "Note"].map((heading) => (
+                  <th
+                    key={heading}
+                    style={{
+                      textAlign: "left",
+                      padding: "8px 6px",
+                      fontSize: 11,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      borderBottom: "1px solid rgba(255,255,255,0.14)",
+                      color: "rgba(188, 215, 255, 0.88)",
+                      position: "sticky",
+                      top: 0,
+                      background: "rgba(4, 8, 20, 0.96)",
+                    }}
+                  >
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {diagnosticsRows.map((row, index) => (
+                <tr key={`${row.category}-${row.label}-${index}`}>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)", color: "rgba(176, 214, 255, 0.9)" }}>{row.category}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>{row.label}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>{row.raw}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>{row.userControl}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>{row.effective}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)", textTransform: "lowercase" }}>{row.source}</td>
+                  <td style={{ padding: "8px 6px", borderBottom: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.72)" }}>{row.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div
         style={{
