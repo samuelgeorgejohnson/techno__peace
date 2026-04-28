@@ -87,6 +87,7 @@ const initialMixerPages: MixerPage[] = [
       { id: "rain", name: "Rain", detail: "Soft roof hiss and droplets" },
       { id: "wind", name: "Wind", detail: "Wide gusts and airy movement" },
       { id: "humidity", name: "Humidity", detail: "Diffusion and wet air softness" },
+      { id: "placeDrone", name: "Place Drone", detail: "Base drone level and place resonance" },
       { id: "birds", name: "Birds", detail: "Daytime chirps and garden life" },
     ],
   },
@@ -119,6 +120,7 @@ const INITIAL_MIX_LEVELS: Record<string, number> = {
   humidity: 100,
   sun: 100,
   moon: 100,
+  placeDrone: 100,
   birds: 100,
   chimes: 100,
   train: 100,
@@ -210,6 +212,7 @@ export default function SkyInstrument({
   const humidityMix = (mixLevels.humidity ?? 100) / 100;
   const sunMix = (mixLevels.sun ?? 100) / 100;
   const moonMix = (mixLevels.moon ?? 100) / 100;
+  const placeDroneMix = (mixLevels.placeDrone ?? 100) / 100;
   const birdsMix = (mixLevels.birds ?? 100) / 100;
   const chimesMix = (mixLevels.chimes ?? 100) / 100;
   const moonIllumination =
@@ -457,10 +460,11 @@ export default function SkyInstrument({
       moonLevel: effectiveMoon,
       birdsLevel: birdsMix,
       chimesLevel: chimesMix,
+      placeDroneLevel: placeDroneMix,
       airMix: manMadeMix.air ?? 1,
       air: resolvedAirSignal,
     };
-  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeMix.air, resolvedAirSignal, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeMix.air, placeDroneMix, resolvedAirSignal, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;

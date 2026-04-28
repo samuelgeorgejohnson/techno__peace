@@ -243,9 +243,9 @@ export function useAudioEngine() {
     airNoiseSrcRef.current = airNoiseSrc;
 
     const weatherFilter = ctx.createBiquadFilter();
-    weatherFilter.type = "bandpass";
-    weatherFilter.frequency.value = 900;
-    weatherFilter.Q.value = 0.8;
+    weatherFilter.type = "highpass";
+    weatherFilter.frequency.value = 320;
+    weatherFilter.Q.value = 0.6;
     weatherFilterRef.current = weatherFilter;
 
     const weatherNoiseGain = ctx.createGain();
@@ -254,8 +254,8 @@ export function useAudioEngine() {
 
     const airNoiseFilter = ctx.createBiquadFilter();
     airNoiseFilter.type = "bandpass";
-    airNoiseFilter.frequency.value = 2200;
-    airNoiseFilter.Q.value = 1.2;
+    airNoiseFilter.frequency.value = 900;
+    airNoiseFilter.Q.value = 4.2;
     airNoiseFilterRef.current = airNoiseFilter;
 
     const airNoiseGain = ctx.createGain();
@@ -263,14 +263,14 @@ export function useAudioEngine() {
     airNoiseGainRef.current = airNoiseGain;
 
     const airTone = ctx.createOscillator();
-    airTone.type = "triangle";
-    airTone.frequency.value = 380;
+    airTone.type = "sawtooth";
+    airTone.frequency.value = 260;
     airToneRef.current = airTone;
 
     const airToneFilter = ctx.createBiquadFilter();
     airToneFilter.type = "bandpass";
-    airToneFilter.frequency.value = 1400;
-    airToneFilter.Q.value = 3.2;
+    airToneFilter.frequency.value = 620;
+    airToneFilter.Q.value = 8;
     airToneFilterRef.current = airToneFilter;
 
     const airToneGain = ctx.createGain();
@@ -302,9 +302,9 @@ export function useAudioEngine() {
     chimeGainRef.current = chimeGain;
 
     const trafficFilter = ctx.createBiquadFilter();
-    trafficFilter.type = "bandpass";
-    trafficFilter.frequency.value = 90;
-    trafficFilter.Q.value = 0.9;
+    trafficFilter.type = "lowpass";
+    trafficFilter.frequency.value = 140;
+    trafficFilter.Q.value = 0.7;
     trafficFilterRef.current = trafficFilter;
 
     const lfo = ctx.createOscillator();
@@ -400,6 +400,7 @@ export function useAudioEngine() {
     const moonNorm = clamp(p.moonPhase);
     const birdsLevel = clamp(p.birdsLevel ?? 1, 0, 2);
     const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
+    const placeDroneLevel = clamp(p.placeDroneLevel ?? 1, 0, 2);
     const airMix = clamp(p.airMix ?? 1, 0, 2);
 
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
@@ -417,9 +418,9 @@ export function useAudioEngine() {
     const baseQ = clamp(0.55 + 0.6 * (1 - humidityNorm), 0.5, 1.3);
 
     const weatherMix = clamp((windNorm + humidityNorm + rainNorm) / 3, 0, 1.8);
-    const windLayerLevel = clamp((0.001 + 0.032 * windNorm) * (1 - 0.2 * humidityNorm), 0, 0.04);
+    const windLayerLevel = clamp((0.008 + 0.07 * windNorm) * (0.65 + 0.35 * (1 - humidityNorm)), 0, 0.12);
     const rainLayerLevel = clamp((0.001 + 0.05 * rainNorm) * (1 - 0.1 * humidityNorm), 0, 0.05);
-    const weatherFilterHz = clamp(700 + 1800 * (1 - y) + 400 * sunNorm, 400, 3600);
+    const weatherFilterHz = clamp(260 + 460 * windNorm + 240 * (1 - y), 180, 1200);
 
     const manMadeAir = p.air;
     const airDensity = clamp(manMadeAir?.normalized.density ?? 0.2 + windNorm * 0.4);
@@ -429,10 +430,10 @@ export function useAudioEngine() {
     const airMotion = clamp(manMadeAir?.normalized.motion ?? 0.25 + windNorm * 0.4);
     const airTension = clamp(manMadeAir?.normalized.tension ?? 0.2);
 
-    const airNoiseLevel = clamp((0.002 + airDensity * 0.016) * airMix, 0, 0.03);
-    const airToneLevel = clamp((0.001 + airProximity * 0.012 + airTension * 0.004) * airMix, 0, 0.02);
-    const airNoiseBand = clamp(1200 + 3200 * airDensity, 1200, 5000);
-    const airToneHz = clamp(180 + airProximity * 300, 180, 600);
+    const airNoiseLevel = clamp((0.001 + airDensity * 0.008) * airMix, 0, 0.018);
+    const airToneLevel = clamp((0.006 + airProximity * 0.02 + airTension * 0.008) * airMix, 0, 0.045);
+    const airNoiseBand = clamp(700 + 500 * airDensity, 650, 1400);
+    const airToneHz = clamp(150 + airProximity * 110, 140, 320);
     const airMotionLfoRate = clamp(0.03 + 0.09 * airMotion, 0.03, 0.12);
     const airMotionLfoDepth = clamp(20 + 180 * airMotion, 20, 260);
 
@@ -447,7 +448,7 @@ export function useAudioEngine() {
     const nightness = 1 - dayness;
     const chimeActivityTarget = clamp((0.1 + 0.9 * nightness) * (0.3 + 0.7 * moonNorm) * (1 - 0.55 * precipNorm) * chimesLevel, 0, 2);
     chimeActivityRef.current += (chimeActivityTarget - chimeActivityRef.current) * 0.1;
-    const chimeDensity = clamp(0.02 + 0.22 * chimeActivityRef.current, 0, 0.4);
+    const chimeDensity = clamp(0.08 + 0.34 * chimeActivityRef.current, 0.08, 0.55);
 
     const trafficFromPayload = (p as AudioEngineSignalPayload & { road?: { normalized?: { density?: number; proximity?: number; motion?: number; delay?: number } } }).road;
     const congestion = clamp(trafficFromPayload?.normalized?.density ?? 0.2 + 0.45 * dayness);
@@ -500,10 +501,10 @@ export function useAudioEngine() {
 
     if (now >= nextChimeEventRef.current && chimeActivityRef.current > 0.03 && chimeFilterRef.current) {
       if (Math.random() < chimeDensity * 0.35) {
-        const base = clamp(500 + Math.random() * 1300, 500, 1800);
-        const ratios = [1, 2.01, 2.72, 4.13];
-        const decay = 1.5 + Math.random() * 2.5;
-        const amp = clamp(0.02 + Math.random() * 0.03, 0.02, 0.05) * clamp(chimesLevel / 1.3, 0, 1.5);
+        const base = clamp(420 + Math.random() * 740, 420, 1160);
+        const ratios = [1, 1.5, 2.24, 3.17];
+        const decay = 2.8 + Math.random() * 3.8;
+        const amp = clamp(0.045 + Math.random() * 0.04, 0.045, 0.085) * clamp(chimesLevel / 1.15, 0, 1.8);
         ratios.forEach((ratio, idx) => {
           const part = ctx.createOscillator();
           const partGain = ctx.createGain();
@@ -519,7 +520,7 @@ export function useAudioEngine() {
         });
         console.log("[audio] chime event", { chimesLevel, chimeActivity: chimeActivityRef.current, base, decay, amp });
       }
-      nextChimeEventRef.current = now + (1.4 + (1 - clamp(chimeActivityRef.current / 2)) * 4.4) * (0.85 + Math.random() * 0.45);
+      nextChimeEventRef.current = now + (2.6 + (1 - clamp(chimeActivityRef.current / 2)) * 6.6) * (0.9 + Math.random() * 0.6);
     }
 
     if (now >= nextAirPassEventRef.current && airMix > 0.01 && airPannerRef.current && airToneFilterRef.current) {
@@ -552,10 +553,10 @@ export function useAudioEngine() {
       if (Math.random() < 0.12 + congestion * 0.5) {
         const blip = ctx.createOscillator();
         const blipGain = ctx.createGain();
-        const hz = 300 + Math.random() * 600;
-        const dur = 0.06 + Math.random() * 0.18;
-        const amp = clamp(0.0015 + congestion * 0.005, 0.001, 0.008);
-        blip.type = "square";
+        const hz = 70 + Math.random() * 180;
+        const dur = 0.12 + Math.random() * 0.3;
+        const amp = clamp(0.003 + congestion * 0.008, 0.0025, 0.013);
+        blip.type = "sawtooth";
         blip.frequency.setValueAtTime(hz, now);
         blip.frequency.exponentialRampToValueAtTime(hz * (0.9 + trafficJitter), now + dur);
         blipGain.gain.setValueAtTime(0.00001, now);
@@ -571,7 +572,7 @@ export function useAudioEngine() {
     }
 
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);
-    const baseDroneMix = clamp(0.22 + 0.16 * pressure, 0.16, 0.42);
+    const baseDroneMix = clamp((0.22 + 0.16 * pressure) * placeDroneLevel, 0, 0.84);
     const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
@@ -588,16 +589,16 @@ export function useAudioEngine() {
     baseFilterRef.current?.Q.setTargetAtTime(baseQ, now, 0.08);
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
-    weatherFilterRef.current?.Q.setTargetAtTime(clamp(0.7 + 1.1 * windNorm, 0.6, 2.2), now, 0.1);
+    weatherFilterRef.current?.Q.setTargetAtTime(clamp(0.5 + 0.6 * windNorm, 0.5, 1.4), now, 0.1);
     weatherNoiseGainRef.current?.gain.setTargetAtTime(weatherMix, now, 0.1);
     windGainRef.current?.gain.setTargetAtTime(windLayerLevel * gate(monitorState.wind), now, 0.1);
     rainGainRef.current?.gain.setTargetAtTime(rainLayerLevel * gate(monitorState.rain), now, 0.1);
 
     airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBand, now, 0.14);
-    airNoiseFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + 1.3 * airDensity, 0.8, 2.5), now, 0.14);
+    airNoiseFilterRef.current?.Q.setTargetAtTime(clamp(3.4 + 3.2 * airDensity, 3.4, 7.2), now, 0.14);
     airNoiseGainRef.current?.gain.setTargetAtTime(airNoiseLevel, now, 0.12);
-    airToneFilterRef.current?.frequency.setTargetAtTime(clamp(1200 + 2400 * airProximity, 1200, 5000), now, 0.12);
-    airToneFilterRef.current?.Q.setTargetAtTime(clamp(2 + 2.2 * airTension, 2, 4.5), now, 0.12);
+    airToneFilterRef.current?.frequency.setTargetAtTime(clamp(460 + 620 * airProximity, 420, 1250), now, 0.12);
+    airToneFilterRef.current?.Q.setTargetAtTime(clamp(6 + 6 * airTension, 6, 12), now, 0.12);
     airToneGainRef.current?.gain.setTargetAtTime(airToneLevel, now, 0.12);
     airToneRef.current?.frequency.setTargetAtTime(airToneHz, now, 0.12);
 
@@ -611,10 +612,10 @@ export function useAudioEngine() {
 
     chimeFilterRef.current?.frequency.setTargetAtTime(clamp(700 + moonNorm * 1100, 700, 1800), now, 0.18);
     chimeFilterRef.current?.Q.setTargetAtTime(5.2, now, 0.2);
-    chimeGainRef.current?.gain.setTargetAtTime(clamp(0.08 + 0.24 * chimeActivityRef.current, 0.05, 0.45), now, 0.22);
+    chimeGainRef.current?.gain.setTargetAtTime(clamp(0.16 + 0.44 * chimeActivityRef.current, 0.14, 0.75), now, 0.22);
 
-    trafficFilterRef.current?.frequency.setTargetAtTime(trafficFilterHz, now, 0.2);
-    trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + 1.6 * proximity, 0.8, 2.4), now, 0.2);
+    trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * proximity, 60, 170), now, 0.2);
+    trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
     baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * gate(monitorState.baseDrone), now, 0.16);
