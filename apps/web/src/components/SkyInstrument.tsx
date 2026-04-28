@@ -3,6 +3,7 @@ import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-d
 import type { AirSignal, ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
 import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
+import type { AudioMonitorState } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { useManMadeAirSignal } from "../hooks/useManMadeAirSignal";
 import { getSkyState } from "./getSkyState";
@@ -126,6 +127,30 @@ const INITIAL_MIX_LEVELS: Record<string, number> = {
   harbor: 100,
 };
 
+const AUDIO_MONITOR_LAYERS: Array<{ id: keyof AudioMonitorState; label: string }> = [
+  { id: "baseDrone", label: "Base drone" },
+  { id: "wind", label: "Wind" },
+  { id: "rain", label: "Rain" },
+  { id: "birds", label: "Birds" },
+  { id: "chimes", label: "Chimes" },
+  { id: "air", label: "Air" },
+  { id: "traffic", label: "Traffic" },
+];
+const AUDIO_MONITOR_LABELS: Record<keyof AudioMonitorState, string> = AUDIO_MONITOR_LAYERS.reduce(
+  (acc, layer) => ({ ...acc, [layer.id]: layer.label.toLowerCase() }),
+  {} as Record<keyof AudioMonitorState, string>,
+);
+
+const DEFAULT_AUDIO_MONITOR_STATE: AudioMonitorState = {
+  baseDrone: true,
+  wind: true,
+  rain: true,
+  birds: true,
+  chimes: true,
+  air: true,
+  traffic: true,
+};
+
 function FadersIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -155,7 +180,7 @@ export default function SkyInstrument({
 }: SkyInstrumentProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
-  const { start, update, isRunning } = useAudioEngine();
+  const { start, update, isRunning, setAudioMonitorState } = useAudioEngine();
   const weather = useCurrentWeatherSignal();
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
@@ -167,6 +192,7 @@ export default function SkyInstrument({
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -442,6 +468,10 @@ export default function SkyInstrument({
   }, [audioParams, isRunning, pt, update]);
 
   useEffect(() => {
+    setAudioMonitorState(audioMonitor);
+  }, [audioMonitor, setAudioMonitorState]);
+
+  useEffect(() => {
     latestPointRef.current = pt;
   }, [pt]);
 
@@ -566,6 +596,27 @@ export default function SkyInstrument({
 
   function updateChannelLevel(channelId: string, level: number) {
     setMixLevels((prev) => ({ ...prev, [channelId]: level }));
+  }
+
+  function setMonitorLayer(layer: keyof AudioMonitorState, nextValue: boolean) {
+    setAudioMonitor((prev) => {
+      if (prev[layer] === nextValue) return prev;
+      console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextValue ? "on" : "off"}`);
+      return { ...prev, [layer]: nextValue };
+    });
+  }
+
+  function setMonitorPreset(nextState: AudioMonitorState) {
+    setAudioMonitor((prev) => {
+      let changed = false;
+      (Object.keys(nextState) as Array<keyof AudioMonitorState>).forEach((layer) => {
+        if (prev[layer] !== nextState[layer]) {
+          changed = true;
+          console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextState[layer] ? "on" : "off"}`);
+        }
+      });
+      return changed ? nextState : prev;
+    });
   }
 
   function channelDisplayPercent(channelId: string) {
@@ -949,6 +1000,125 @@ export default function SkyInstrument({
             padding: 12,
           }}
         >
+          <div
+            style={{
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 12,
+              padding: 10,
+              marginBottom: 10,
+              background: "rgba(255,255,255,0.03)",
+              display: "grid",
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "rgba(188, 215, 255, 0.88)",
+                fontWeight: 700,
+              }}
+            >
+              Audio Monitor
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {AUDIO_MONITOR_LAYERS.map((layer) => {
+                const active = audioMonitor[layer.id];
+                return (
+                  <button
+                    key={layer.id}
+                    type="button"
+                    onClick={() => setMonitorLayer(layer.id, !active)}
+                    style={{
+                      borderRadius: 999,
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      background: active ? "rgba(95, 220, 205, 0.22)" : "rgba(255,255,255,0.06)",
+                      color: "rgba(255,255,255,0.95)",
+                      padding: "6px 10px",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {layer.label}: {active ? "On" : "Off"}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              <button type="button" onClick={() => setMonitorPreset(DEFAULT_AUDIO_MONITOR_STATE)} style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>
+                All On
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setMonitorPreset({
+                    baseDrone: false,
+                    wind: false,
+                    rain: false,
+                    birds: false,
+                    chimes: false,
+                    air: false,
+                    traffic: false,
+                  })
+                }
+                style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                All Off
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setMonitorPreset({
+                    baseDrone: false,
+                    wind: true,
+                    rain: true,
+                    birds: false,
+                    chimes: false,
+                    air: false,
+                    traffic: false,
+                  })
+                }
+                style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                Weather Only
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setMonitorPreset({
+                    baseDrone: false,
+                    wind: true,
+                    rain: true,
+                    birds: true,
+                    chimes: true,
+                    air: false,
+                    traffic: false,
+                  })
+                }
+                style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                Nature Only
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setMonitorPreset({
+                    baseDrone: false,
+                    wind: false,
+                    rain: false,
+                    birds: false,
+                    chimes: false,
+                    air: true,
+                    traffic: true,
+                  })
+                }
+                style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer" }}
+              >
+                Human/Machine Only
+              </button>
+            </div>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: "rgba(255,255,255,0.92)" }}>
             <thead>
               <tr>

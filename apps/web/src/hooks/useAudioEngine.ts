@@ -24,6 +24,16 @@ export function derivePlaceBaseFrequency(latitude: number, longitude: number) {
   return 440 * Math.pow(2, (baseMidi - 69) / 12) * Math.pow(2, microDetuneCents / 1200);
 }
 
+export type AudioMonitorState = {
+  baseDrone: boolean;
+  wind: boolean;
+  rain: boolean;
+  birds: boolean;
+  chimes: boolean;
+  air: boolean;
+  traffic: boolean;
+};
+
 export function useAudioEngine() {
   const ctxRef = useRef<AudioContext | null>(null);
 
@@ -38,6 +48,8 @@ export function useAudioEngine() {
   const masterGainRef = useRef<GainNode | null>(null);
   const baseDroneGainRef = useRef<GainNode | null>(null);
   const weatherGainRef = useRef<GainNode | null>(null);
+  const windGainRef = useRef<GainNode | null>(null);
+  const rainGainRef = useRef<GainNode | null>(null);
   const celestialGainRef = useRef<GainNode | null>(null);
   const lifeGainRef = useRef<GainNode | null>(null);
   const airGainRef = useRef<GainNode | null>(null);
@@ -73,6 +85,15 @@ export function useAudioEngine() {
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const monitorStateRef = useRef<AudioMonitorState>({
+    baseDrone: true,
+    wind: true,
+    rain: true,
+    birds: true,
+    chimes: true,
+    air: true,
+    traffic: true,
+  });
 
   function resetGraph() {
     subRef.current = null;
@@ -86,6 +107,8 @@ export function useAudioEngine() {
     masterGainRef.current = null;
     baseDroneGainRef.current = null;
     weatherGainRef.current = null;
+    windGainRef.current = null;
+    rainGainRef.current = null;
     celestialGainRef.current = null;
     lifeGainRef.current = null;
     airGainRef.current = null;
@@ -154,6 +177,12 @@ export function useAudioEngine() {
     const weatherGain = ctx.createGain();
     weatherGain.gain.value = 0;
     weatherGainRef.current = weatherGain;
+    const windGain = ctx.createGain();
+    windGain.gain.value = 0;
+    windGainRef.current = windGain;
+    const rainGain = ctx.createGain();
+    rainGain.gain.value = 0;
+    rainGainRef.current = rainGain;
     const celestialGain = ctx.createGain();
     celestialGain.gain.value = 0;
     celestialGainRef.current = celestialGain;
@@ -308,7 +337,10 @@ export function useAudioEngine() {
 
     noiseSrc.connect(weatherFilter);
     weatherFilter.connect(weatherNoiseGain);
-    weatherNoiseGain.connect(weatherGain);
+    weatherNoiseGain.connect(windGain);
+    weatherNoiseGain.connect(rainGain);
+    windGain.connect(weatherGain);
+    rainGain.connect(weatherGain);
 
     airNoiseSrc.connect(airNoiseFilter);
     airNoiseFilter.connect(airNoiseGain);
@@ -385,7 +417,8 @@ export function useAudioEngine() {
     const baseQ = clamp(0.55 + 0.6 * (1 - humidityNorm), 0.5, 1.3);
 
     const weatherMix = clamp((windNorm + humidityNorm + rainNorm) / 3, 0, 1.8);
-    const weatherNoiseLevel = clamp((0.002 + 0.04 * windNorm + 0.03 * rainNorm) * (1 - 0.2 * humidityNorm), 0, 0.05);
+    const windLayerLevel = clamp((0.001 + 0.032 * windNorm) * (1 - 0.2 * humidityNorm), 0, 0.04);
+    const rainLayerLevel = clamp((0.001 + 0.05 * rainNorm) * (1 - 0.1 * humidityNorm), 0, 0.05);
     const weatherFilterHz = clamp(700 + 1800 * (1 - y) + 400 * sunNorm, 400, 3600);
 
     const manMadeAir = p.air;
@@ -543,6 +576,8 @@ export function useAudioEngine() {
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
     const trafficLayerMix = clamp(0.18 + congestion * 0.28, 0, 0.65);
+    const monitorState = monitorStateRef.current;
+    const gate = (active: boolean) => (active ? 1 : 0);
 
     subRef.current?.frequency.setTargetAtTime(subHz, now, 0.04);
     rootRef.current?.frequency.setTargetAtTime(rootHz, now, 0.04);
@@ -554,7 +589,9 @@ export function useAudioEngine() {
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
     weatherFilterRef.current?.Q.setTargetAtTime(clamp(0.7 + 1.1 * windNorm, 0.6, 2.2), now, 0.1);
-    weatherNoiseGainRef.current?.gain.setTargetAtTime(weatherNoiseLevel, now, 0.1);
+    weatherNoiseGainRef.current?.gain.setTargetAtTime(weatherMix, now, 0.1);
+    windGainRef.current?.gain.setTargetAtTime(windLayerLevel * gate(monitorState.wind), now, 0.1);
+    rainGainRef.current?.gain.setTargetAtTime(rainLayerLevel * gate(monitorState.rain), now, 0.1);
 
     airNoiseFilterRef.current?.frequency.setTargetAtTime(airNoiseBand, now, 0.14);
     airNoiseFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + 1.3 * airDensity, 0.8, 2.5), now, 0.14);
@@ -580,12 +617,12 @@ export function useAudioEngine() {
     trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + 1.6 * proximity, 0.8, 2.4), now, 0.2);
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
-    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix, now, 0.16);
-    weatherGainRef.current?.gain.setTargetAtTime(weatherMix * clamp(p.windMps / 20, 0, 2), now, 0.16);
-    celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel, now, 0.2);
-    lifeGainRef.current?.gain.setTargetAtTime(lifeMix, now, 0.2);
-    airGainRef.current?.gain.setTargetAtTime(airLayerMix, now, 0.16);
-    trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain, now, 0.2);
+    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * gate(monitorState.baseDrone), now, 0.16);
+    weatherGainRef.current?.gain.setTargetAtTime(clamp(p.windMps / 20, 0, 2), now, 0.16);
+    celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel * gate(monitorState.chimes), now, 0.2);
+    lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
+    airGainRef.current?.gain.setTargetAtTime(airLayerMix * gate(monitorState.air), now, 0.16);
+    trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain * gate(monitorState.traffic), now, 0.2);
 
     lfoRef.current?.frequency.setTargetAtTime(clamp(0.06 + 0.35 * sunNorm, 0.05, 0.6), now, 0.12);
     lfoGainRef.current?.gain.setTargetAtTime(clamp(0.003 + 0.01 * moonNorm, 0.002, 0.015), now, 0.14);
@@ -635,5 +672,9 @@ export function useAudioEngine() {
     };
   }, []);
 
-  return { start, update, stop, isRunning };
+  function setAudioMonitorState(next: AudioMonitorState) {
+    monitorStateRef.current = next;
+  }
+
+  return { start, update, stop, isRunning, setAudioMonitorState };
 }
