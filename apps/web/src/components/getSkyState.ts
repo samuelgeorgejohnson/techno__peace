@@ -48,11 +48,13 @@ export function getSkyState({
   cloudCover,
   windMps,
   isDay,
+  moonIllumination = 0,
 }: {
   sunAltitudeDeg: number;
   cloudCover: number;
   windMps: number;
   isDay: boolean;
+  moonIllumination?: number;
 }): SkyState {
   const sun = Math.max(-90, Math.min(90, sunAltitudeDeg));
   const cloud = clamp01(cloudCover);
@@ -70,27 +72,60 @@ export function getSkyState({
   const noonLift = smoothstep(10, 55, sun);
   const dayness = clamp01((isDay ? 0.72 : 0) + (0.28 * dayLift + 0.22 * noonLift));
   const duskDrop = smoothstep(4, -12, sun);
-  const brightness = clamp01(0.05 + 0.5 * dayness + 0.33 * noonLift - 0.18 * duskDrop);
+  const clearSkyFactor = 1 - cloud;
+  const moonLightFactor = clamp01(moonIllumination);
+  const nightEligible = sun < -0.833;
+  const baseBrightness = clamp01(0.05 + 0.5 * dayness + 0.33 * noonLift - 0.18 * duskDrop);
+  const twilightBoost =
+    phase === "sunrise-sunset"
+      ? 0.1
+      : phase === "civil-twilight"
+        ? 0.09
+        : phase === "nautical-twilight"
+          ? 0.08
+          : phase === "astronomical-twilight"
+            ? 0.065
+            : phase === "night"
+              ? 0.05
+              : 0;
+  const moonLift = nightEligible ? 0.02 + moonLightFactor * clearSkyFactor * 0.13 : 0;
+  const cloudNightPenalty = nightEligible ? cloud * 0.025 : 0;
+  const brightness = clamp01(baseBrightness + twilightBoost + moonLift - cloudNightPenalty);
 
   const horizonWarmth = 1 - smoothstep(2, 18, Math.abs(sun));
   const goldenWarmth = smoothstep(4, 16, sun) * (1 - smoothstep(16, 26, sun));
   const dayBlue = smoothstep(8, 45, sun);
 
-  const nightTop: [number, number, number] = [2, 5, 14];
+  const nightTop: [number, number, number] = [8, 16, 38];
   const dawnTop: [number, number, number] = [34, 53, 92];
   const dayTop: [number, number, number] = [74, 139, 226];
 
-  const nightMid: [number, number, number] = [6, 10, 24];
+  const nightMid: [number, number, number] = [14, 24, 52];
   const dawnMid: [number, number, number] = [77, 105, 162];
   const dayMid: [number, number, number] = [126, 182, 244];
 
-  const nightHorizon: [number, number, number] = [10, 14, 28];
+  const nightHorizon: [number, number, number] = [20, 30, 58];
   const dawnHorizon: [number, number, number] = [222, 144, 112];
   const dayHorizon: [number, number, number] = [186, 214, 252];
 
-  const topBase = blendRgb(blendRgb(nightTop, dawnTop, dayness), dayTop, dayBlue);
-  const midBase = blendRgb(blendRgb(nightMid, dawnMid, dayness), dayMid, dayBlue);
-  const horizonBase = blendRgb(blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.6, dayness * 0.72)), dayHorizon, dayBlue);
+  const moonTint: [number, number, number] = [128, 148, 188];
+  const moonTintStrength = nightEligible ? 0.06 + moonLightFactor * clearSkyFactor * 0.2 : 0;
+
+  const topBase = blendRgb(
+    blendRgb(blendRgb(nightTop, dawnTop, dayness), dayTop, dayBlue),
+    moonTint,
+    moonTintStrength * 0.9,
+  );
+  const midBase = blendRgb(
+    blendRgb(blendRgb(nightMid, dawnMid, dayness), dayMid, dayBlue),
+    moonTint,
+    moonTintStrength,
+  );
+  const horizonBase = blendRgb(
+    blendRgb(blendRgb(nightHorizon, dawnHorizon, Math.max(horizonWarmth * 0.6, dayness * 0.72)), dayHorizon, dayBlue),
+    moonTint,
+    moonTintStrength * 0.72,
+  );
 
   const overcastTint = blendRgb([44, 52, 76], [132, 145, 166], dayness);
   const cloudMute = smoothstep(0.35, 1, cloud) * (0.4 + 0.24 * dayness);
