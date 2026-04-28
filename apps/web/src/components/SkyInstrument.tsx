@@ -138,6 +138,34 @@ export default function SkyInstrument({
   const moonMix = (mixLevels.moon ?? 100) / 100;
   const birdsMix = (mixLevels.birds ?? 100) / 100;
   const chimesMix = (mixLevels.chimes ?? 100) / 100;
+  const lifeDayPresence = clamp01((weather.isDay ? 0.3 : 0) + 0.7 * Math.pow(clamp01((weather.sunAltitudeDeg + 6) / 52), 1.18));
+  const lifeDawnLift = clamp01(1 - Math.abs(clamp01((weather.sunAltitudeDeg + 90) / 180) - 0.31) / 0.22);
+  const lifeTempComfort = clamp01(1 - Math.pow((weather.temperatureC - 19) / 15, 2));
+  const lifeCloudSuppression = clamp01(1 - 0.48 * weather.cloudCover);
+  const lifeRainNorm = clamp01((weather.rainMm + weather.showersMm) / 5);
+  const lifeRainSuppression = clamp01(1 - Math.pow(lifeRainNorm, 0.7) * 1.08);
+  const lifeWindNorm = clamp01(weather.windMps / 20);
+  const lifeWindComfort = clamp01(1 - Math.abs(lifeWindNorm - 0.2) / 0.36);
+  const lifeWindSuppression = clamp01(1 - Math.pow(clamp01((lifeWindNorm - 0.62) / 0.38), 1.25));
+  const lifeBaseActivity = clamp01(
+    lifeDayPresence *
+      (0.58 + 0.62 * lifeDawnLift) *
+      (0.72 + 0.42 * lifeTempComfort) *
+      lifeCloudSuppression *
+      lifeRainSuppression *
+      (0.55 + 0.6 * lifeWindComfort) *
+      lifeWindSuppression,
+  );
+  const lifeFinalActivity = clampRange(lifeBaseActivity * birdsMix, 0, 1.2);
+  const lifeHudState = !weather.isDay || weather.sunAltitudeDeg < -6
+    ? "quiet"
+    : lifeRainSuppression < 0.45 || lifeWindSuppression < 0.55
+      ? "weather-muted"
+      : lifeFinalActivity > 0.58
+        ? "active"
+        : lifeFinalActivity > 0.24
+          ? "waking"
+          : "quiet";
   const moonIllumination =
     weather.moonPhase <= 0.5 ? weather.moonPhase * 2 : (1 - weather.moonPhase) * 2;
   const moonLightFactor = clamp01(moonIllumination);
@@ -296,13 +324,13 @@ export default function SkyInstrument({
         note: "nearby aircraft presence used for air tone/noise drive",
       },
       {
-        category: "Mixer levels",
-        label: "Birds slider",
-        raw: fmtPercent(weather.isDay ? 1 : 0.2),
+        category: "Life/Birds values",
+        label: "Life activity",
+        raw: `${fmtPercent(lifeBaseActivity)} • ${lifeHudState}`,
         userControl: fmtPercent(birdsMix),
-        effective: fmtPercent(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) / 2),
-        source: "user-controlled",
-        note: "day/night bird gate multiplied by birds slider",
+        effective: fmtPercent(lifeFinalActivity / 1.2),
+        source: weatherSourceStatus,
+        note: "isDay + sun + temp + cloud + rain + wind, then Birds slider multiplies final activity",
       },
       {
         category: "Mixer levels",
@@ -342,7 +370,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, lifeBaseActivity, lifeFinalActivity, lifeHudState, manMadeAir.air, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -512,7 +540,7 @@ export default function SkyInstrument({
     if (channelId === "humidity") return Math.round(effectiveHumidity * 100);
     if (channelId === "sun") return Math.round((celestialMix.sun ?? 1) * 100);
     if (channelId === "moon") return Math.round((celestialMix.moon ?? 1) * 100);
-    if (channelId === "birds") return Math.round(clampRange((weather.isDay ? 1 : 0.2) * birdsMix, 0, 2) * 100);
+    if (channelId === "birds") return Math.round((lifeFinalActivity / 1.2) * 200);
     if (channelId === "chimes") return Math.round(clampRange((0.35 + 0.65 * nightFactor) * chimesMix, 0, 2) * 100);
     if (channelId === "air") return Math.round((manMadeAir.air?.normalized.density ?? 0) * 100);
     return mixLevels[channelId] ?? 100;
@@ -565,7 +593,7 @@ export default function SkyInstrument({
       return `Live: ${manMadeAir.air.count} aircraft • ${nearestDistance} • ${avgVelocity} • ${doppler}`;
     }
     if (channelId === "birds") {
-      return weather.isDay ? "Live: daytime chirps • dawn boosted" : "Live: reduced at night";
+      return `life: ${lifeHudState} • activity ${Math.round((lifeFinalActivity / 1.2) * 100)}%`;
     }
     if (channelId === "chimes") {
       return weather.isDay ? "Live: sparse wind chimes" : "Live: sparse night bell tones";
@@ -837,6 +865,7 @@ export default function SkyInstrument({
               lat: {weather.latitude.toFixed(4)} lon: {weather.longitude.toFixed(4)}
             </div>
             <div>weather: {weather.status}</div>
+            <div>life: {lifeHudState}</div>
             <div>
               moon illum/factor: {Math.round(moonIllumination * 100)}% / {Math.round(moonLightFactor * 100)}%
             </div>
