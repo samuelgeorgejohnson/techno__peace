@@ -47,6 +47,9 @@ export function useAudioEngine() {
 
   const masterGainRef = useRef<GainNode | null>(null);
   const baseDroneGainRef = useRef<GainNode | null>(null);
+  const mainSignalGainRef = useRef<GainNode | null>(null);
+  const mainSignalWetGainRef = useRef<GainNode | null>(null);
+  const mainSignalDryGainRef = useRef<GainNode | null>(null);
   const weatherGainRef = useRef<GainNode | null>(null);
   const windGainRef = useRef<GainNode | null>(null);
   const rainGainRef = useRef<GainNode | null>(null);
@@ -60,6 +63,16 @@ export function useAudioEngine() {
 
   const baseFilterRef = useRef<BiquadFilterNode | null>(null);
   const weatherFilterRef = useRef<BiquadFilterNode | null>(null);
+  const mainSignalPostFilterRef = useRef<BiquadFilterNode | null>(null);
+  const mainSignalSaturationRef = useRef<WaveShaperNode | null>(null);
+  const mainSignalShimmerDelayRef = useRef<DelayNode | null>(null);
+  const mainSignalShimmerGainRef = useRef<GainNode | null>(null);
+  const mainSignalReverbFilterRef = useRef<BiquadFilterNode | null>(null);
+  const mainSignalReverbGainRef = useRef<GainNode | null>(null);
+  const mainSignalRainNoiseGainRef = useRef<GainNode | null>(null);
+  const mainSignalCompressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const mainSignalGateRef = useRef<GainNode | null>(null);
+  const mainSignalStereoRef = useRef<StereoPannerNode | null>(null);
   const weatherNoiseGainRef = useRef<GainNode | null>(null);
   const airNoiseFilterRef = useRef<BiquadFilterNode | null>(null);
   const airNoiseGainRef = useRef<GainNode | null>(null);
@@ -115,6 +128,9 @@ export function useAudioEngine() {
 
     masterGainRef.current = null;
     baseDroneGainRef.current = null;
+    mainSignalGainRef.current = null;
+    mainSignalWetGainRef.current = null;
+    mainSignalDryGainRef.current = null;
     weatherGainRef.current = null;
     windGainRef.current = null;
     rainGainRef.current = null;
@@ -128,6 +144,16 @@ export function useAudioEngine() {
 
     baseFilterRef.current = null;
     weatherFilterRef.current = null;
+    mainSignalPostFilterRef.current = null;
+    mainSignalSaturationRef.current = null;
+    mainSignalShimmerDelayRef.current = null;
+    mainSignalShimmerGainRef.current = null;
+    mainSignalReverbFilterRef.current = null;
+    mainSignalReverbGainRef.current = null;
+    mainSignalRainNoiseGainRef.current = null;
+    mainSignalCompressorRef.current = null;
+    mainSignalGateRef.current = null;
+    mainSignalStereoRef.current = null;
     weatherNoiseGainRef.current = null;
     airNoiseFilterRef.current = null;
     airNoiseGainRef.current = null;
@@ -222,6 +248,15 @@ export function useAudioEngine() {
     const chaosHatGain = ctx.createGain();
     chaosHatGain.gain.value = 0;
     chaosHatGainRef.current = chaosHatGain;
+    const mainSignalGain = ctx.createGain();
+    mainSignalGain.gain.value = 1;
+    mainSignalGainRef.current = mainSignalGain;
+    const mainSignalDryGain = ctx.createGain();
+    mainSignalDryGain.gain.value = 1;
+    mainSignalDryGainRef.current = mainSignalDryGain;
+    const mainSignalWetGain = ctx.createGain();
+    mainSignalWetGain.gain.value = 0;
+    mainSignalWetGainRef.current = mainSignalWetGain;
 
     const baseFilter = ctx.createBiquadFilter();
     baseFilter.type = "lowpass";
@@ -274,6 +309,43 @@ export function useAudioEngine() {
     weatherFilter.frequency.value = 320;
     weatherFilter.Q.value = 0.6;
     weatherFilterRef.current = weatherFilter;
+    const mainSignalPostFilter = ctx.createBiquadFilter();
+    mainSignalPostFilter.type = "lowpass";
+    mainSignalPostFilter.frequency.value = 1400;
+    mainSignalPostFilter.Q.value = 0.8;
+    mainSignalPostFilterRef.current = mainSignalPostFilter;
+    const mainSignalSaturation = ctx.createWaveShaper();
+    mainSignalSaturation.curve = new Float32Array([-1, -0.85, -0.3, 0, 0.3, 0.85, 1]);
+    mainSignalSaturation.oversample = "2x";
+    mainSignalSaturationRef.current = mainSignalSaturation;
+    const mainSignalShimmerDelay = ctx.createDelay(1.2);
+    mainSignalShimmerDelay.delayTime.value = 0.22;
+    mainSignalShimmerDelayRef.current = mainSignalShimmerDelay;
+    const mainSignalShimmerGain = ctx.createGain();
+    mainSignalShimmerGain.gain.value = 0;
+    mainSignalShimmerGainRef.current = mainSignalShimmerGain;
+    const mainSignalReverbFilter = ctx.createBiquadFilter();
+    mainSignalReverbFilter.type = "highpass";
+    mainSignalReverbFilter.frequency.value = 1200;
+    mainSignalReverbGainRef.current = ctx.createGain();
+    mainSignalReverbGainRef.current.gain.value = 0;
+    mainSignalReverbFilterRef.current = mainSignalReverbFilter;
+    const mainSignalRainNoiseGain = ctx.createGain();
+    mainSignalRainNoiseGain.gain.value = 0;
+    mainSignalRainNoiseGainRef.current = mainSignalRainNoiseGain;
+    const mainSignalCompressor = ctx.createDynamicsCompressor();
+    mainSignalCompressor.threshold.value = -24;
+    mainSignalCompressor.knee.value = 14;
+    mainSignalCompressor.ratio.value = 2.2;
+    mainSignalCompressor.attack.value = 0.03;
+    mainSignalCompressor.release.value = 0.28;
+    mainSignalCompressorRef.current = mainSignalCompressor;
+    const mainSignalGate = ctx.createGain();
+    mainSignalGate.gain.value = 1;
+    mainSignalGateRef.current = mainSignalGate;
+    const mainSignalStereo = ctx.createStereoPanner();
+    mainSignalStereo.pan.value = 0;
+    mainSignalStereoRef.current = mainSignalStereo;
 
     const weatherNoiseGain = ctx.createGain();
     weatherNoiseGain.gain.value = 0;
@@ -376,7 +448,23 @@ export function useAudioEngine() {
     rootGain.connect(baseFilter);
     fifthGain.connect(baseFilter);
     octaveGain.connect(baseFilter);
-    baseFilter.connect(baseDroneGain);
+    baseFilter.connect(mainSignalGain);
+    mainSignalGain.connect(mainSignalPostFilter);
+    mainSignalPostFilter.connect(mainSignalSaturation);
+    mainSignalSaturation.connect(mainSignalDryGain);
+    mainSignalSaturation.connect(mainSignalShimmerDelay);
+    mainSignalShimmerDelay.connect(mainSignalShimmerGain);
+    mainSignalShimmerGain.connect(mainSignalWetGain);
+    mainSignalSaturation.connect(mainSignalReverbFilter);
+    mainSignalReverbFilter.connect(mainSignalReverbGainRef.current);
+    mainSignalReverbGainRef.current.connect(mainSignalWetGain);
+    noiseSrc.connect(mainSignalRainNoiseGain);
+    mainSignalRainNoiseGain.connect(mainSignalWetGain);
+    mainSignalDryGain.connect(mainSignalCompressor);
+    mainSignalWetGain.connect(mainSignalCompressor);
+    mainSignalCompressor.connect(mainSignalGate);
+    mainSignalGate.connect(mainSignalStereo);
+    mainSignalStereo.connect(baseDroneGain);
 
     noiseSrc.connect(weatherFilter);
     weatherFilter.connect(weatherNoiseGain);
@@ -517,6 +605,12 @@ export function useAudioEngine() {
       0,
       0.09,
     );
+    const windInfluence = windNorm;
+    const rainInfluence = rainNorm;
+    const sunInfluence = clamp(p.sunLevel ?? sunNorm, 0, 2);
+    const moonInfluence = clamp(p.moonLevel ?? moonNorm, 0, 2);
+    const trafficInfluence = clamp(trafficDensity * (trafficReliable || !isChaosMode ? 1 : 0.8));
+    const airInfluence = clamp(airDensity * airMix, 0, 2);
     const chaosTempoBpm = clamp(p.chaosTempoBpm ?? 100, 60, 160);
     const chaosStepSeconds = 60 / chaosTempoBpm / 4;
     const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
@@ -709,7 +803,9 @@ export function useAudioEngine() {
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
 
-    baseFilterRef.current?.frequency.setTargetAtTime(isChaosMode ? chaosBrightness : baseCutoff, now, 0.08);
+    const windMainCutoffMod = clamp(1 - windInfluence * 0.22, 0.72, 1);
+    const sunMainBrightness = clamp(1 + sunInfluence * 0.2, 1, 1.35);
+    baseFilterRef.current?.frequency.setTargetAtTime(isChaosMode ? chaosBrightness : baseCutoff * windMainCutoffMod * sunMainBrightness, now, 0.08);
     baseFilterRef.current?.Q.setTargetAtTime(baseQ, now, 0.08);
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
@@ -740,6 +836,16 @@ export function useAudioEngine() {
 
     trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * proximity, 60, 170), now, 0.2);
     trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
+    mainSignalPostFilterRef.current?.frequency.setTargetAtTime(clamp(1000 + 2200 * (1 - windInfluence) + 1200 * sunInfluence, 850, 4600), now, 0.14);
+    mainSignalPostFilterRef.current?.Q.setTargetAtTime(clamp(0.7 + 0.35 * windInfluence + 0.15 * moonInfluence, 0.7, 1.5), now, 0.14);
+    mainSignalShimmerDelayRef.current?.delayTime.setTargetAtTime(clamp(0.14 + moonInfluence * 0.07 + airInfluence * 0.02, 0.14, 0.32), now, 0.18);
+    mainSignalShimmerGainRef.current?.gain.setTargetAtTime(clamp(0.01 + moonInfluence * 0.07, 0.01, 0.12), now, 0.2);
+    mainSignalReverbGainRef.current?.gain.setTargetAtTime(clamp(0.008 + rainInfluence * 0.09, 0.008, 0.16), now, 0.2);
+    mainSignalRainNoiseGainRef.current?.gain.setTargetAtTime(clamp(0.0001 + rainInfluence * 0.006, 0.0001, 0.01), now, 0.12);
+    mainSignalCompressorRef.current?.threshold.setTargetAtTime(clamp(-26 + trafficInfluence * 8, -26, -15), now, 0.15);
+    mainSignalCompressorRef.current?.ratio.setTargetAtTime(clamp(1.8 + trafficInfluence * 1.6, 1.8, 3.4), now, 0.15);
+    mainSignalGateRef.current?.gain.setTargetAtTime(clamp(0.96 + Math.sin(now * (0.45 + trafficInfluence * 1.1)) * (0.005 + trafficInfluence * 0.02), 0.9, 1.05), now, 0.12);
+    mainSignalStereoRef.current?.pan.setTargetAtTime(clamp(Math.sin(now * (0.06 + airInfluence * 0.1)) * (0.05 + airInfluence * 0.2), -0.45, 0.45), now, 0.22);
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
     baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.16);
@@ -757,7 +863,7 @@ export function useAudioEngine() {
     chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(2200 + (1 - y) * 5000 + windNorm * 600, 1800, 8200), now, 0.08);
 
     lfoRef.current?.frequency.setTargetAtTime(clamp(0.06 + 0.35 * sunNorm, 0.05, 0.6), now, 0.12);
-    lfoGainRef.current?.gain.setTargetAtTime(clamp(0.003 + 0.01 * moonNorm, 0.002, 0.015), now, 0.14);
+    lfoGainRef.current?.gain.setTargetAtTime(clamp(0.003 + 0.01 * moonNorm + windInfluence * 0.003, 0.002, 0.02), now, 0.14);
     airMotionLfoRef.current?.frequency.setTargetAtTime(airMotionLfoRate, now, 0.2);
     airMotionGainRef.current?.gain.setTargetAtTime(airMotionLfoDepth, now, 0.2);
   }
