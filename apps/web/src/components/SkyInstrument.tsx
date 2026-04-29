@@ -196,6 +196,7 @@ export default function SkyInstrument({
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [performanceMode, setPerformanceMode] = useState<"sky" | "chaos">("sky");
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
+  const [chaosStep, setChaosStep] = useState(0);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -495,6 +496,20 @@ export default function SkyInstrument({
     return () => window.cancelAnimationFrame(raf);
   }, [audioParams, isRunning, update]);
 
+  useEffect(() => {
+    if (!isRunning || performanceMode !== "chaos") return;
+    const chaosBpm = 100;
+    const chaosSteps = 16;
+    const stepMs = (60_000 / chaosBpm) / 4;
+    const tick = () => {
+      const elapsed = performance.now();
+      setChaosStep(Math.floor(elapsed / stepMs) % chaosSteps);
+    };
+    tick();
+    const timer = window.setInterval(tick, Math.max(24, stepMs / 3));
+    return () => window.clearInterval(timer);
+  }, [isRunning, performanceMode]);
+
   useEffect(
     () => () => {
       if (fadeFrameRef.current !== null) {
@@ -745,6 +760,51 @@ export default function SkyInstrument({
           mixBlendMode: "screen",
         }}
       />
+      {performanceMode === "chaos" && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 26,
+            transform: "translateX(-50%)",
+            display: "grid",
+            gridTemplateColumns: "repeat(16, minmax(10px, 1fr))",
+            gap: 6,
+            width: "min(620px, calc(100vw - 44px))",
+            padding: "10px 12px",
+            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(10,14,26,0.24)",
+            backdropFilter: "blur(8px)",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        >
+          {Array.from({ length: 16 }, (_, idx) => {
+            const isActive = idx === chaosStep;
+            const isQuarter = idx % 4 === 0;
+            return (
+              <div
+                key={`chaos-step-${idx}`}
+                style={{
+                  height: isQuarter ? 17 : 13,
+                  borderRadius: 999,
+                  background: isActive
+                    ? "rgba(170, 222, 255, 0.95)"
+                    : isQuarter
+                      ? "rgba(170, 222, 255, 0.42)"
+                      : "rgba(170, 222, 255, 0.2)",
+                  boxShadow: isActive ? "0 0 16px rgba(150,210,255,0.65)" : "none",
+                  transform: `scaleY(${isActive ? 1 + pt.pressure * 0.3 : 1})`,
+                  transformOrigin: "center",
+                  transition: "background 90ms linear, box-shadow 90ms linear, transform 70ms linear",
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
       <div
         aria-hidden="true"
         style={{
