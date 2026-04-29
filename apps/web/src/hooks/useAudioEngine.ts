@@ -402,6 +402,8 @@ export function useAudioEngine() {
     const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
     const placeDroneLevel = clamp(p.placeDroneLevel ?? 1, 0, 2);
     const airMix = clamp(p.airMix ?? 1, 0, 2);
+    const isChaosMode = p.performanceMode === "chaos";
+    const trafficReliable = p.trafficReliable === true;
 
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
     const octaveOffset = (x - 0.5) * 2;
@@ -450,16 +452,20 @@ export function useAudioEngine() {
     chimeActivityRef.current += (chimeActivityTarget - chimeActivityRef.current) * 0.1;
     const chimeDensity = clamp(0.08 + 0.34 * chimeActivityRef.current, 0.08, 0.55);
 
-    const trafficFromPayload = (p as AudioEngineSignalPayload & { road?: { normalized?: { density?: number; proximity?: number; motion?: number; delay?: number } } }).road;
-    const congestion = clamp(trafficFromPayload?.normalized?.density ?? 0.2 + 0.45 * dayness);
-    const flow = clamp(trafficFromPayload?.normalized?.motion ?? 0.2 + congestion * 0.7);
-    const proximity = clamp(trafficFromPayload?.normalized?.proximity ?? 0.2 + congestion * 0.6);
-    const delay = clamp(trafficFromPayload?.normalized?.delay ?? 0.15 + congestion * 0.25);
-
-    const pulseRate = 1 + flow * 5;
+    const trafficFromPayload = p.road;
+    const trafficDensityColor = clamp(trafficFromPayload?.normalized?.density ?? 0.35);
+    const trafficDensity = clamp(trafficFromPayload?.normalized?.density ?? 0.2 + 0.45 * dayness);
+    const flow = clamp(trafficFromPayload?.normalized?.motion ?? 0.2 + trafficDensity * 0.7);
+    const proximity = clamp(trafficFromPayload?.normalized?.proximity ?? 0.2 + trafficDensity * 0.6);
+    const delay = clamp(0.15 + (1 - flow) * 0.18 + trafficDensity * 0.12);
+    const internalPulseRate = clamp(1.6 + pressure * 3.1 + (1 - y) * 1.2 + Math.abs(x - 0.5) * 0.8, 1.1, 6.2);
+    const pulseRate = isChaosMode ? internalPulseRate : 1 + flow * 5;
     const trafficJitter = delay * 0.25;
-    const trafficRumbleGain = clamp(congestion * 0.08, 0, 0.09);
-    const trafficFilterHz = clamp(45 + 135 * proximity, 45, 180);
+    const trafficRumbleGain = clamp(
+      (isChaosMode ? 0.03 + trafficDensityColor * 0.045 : trafficDensity * 0.08) * (trafficReliable || !isChaosMode ? 1 : 0.8),
+      0,
+      0.09,
+    );
 
     if (rainNorm > 0.02 && Math.random() < rainNorm * 0.35) {
       const click = ctx.createOscillator();
@@ -550,12 +556,12 @@ export function useAudioEngine() {
     }
 
     if (now >= nextTrafficEventRef.current && trafficFilterRef.current) {
-      if (Math.random() < 0.12 + congestion * 0.5) {
+      if (Math.random() < 0.12 + trafficDensity * 0.5) {
         const blip = ctx.createOscillator();
         const blipGain = ctx.createGain();
         const hz = 70 + Math.random() * 180;
         const dur = 0.12 + Math.random() * 0.3;
-        const amp = clamp(0.003 + congestion * 0.008, 0.0025, 0.013);
+        const amp = clamp(0.003 + trafficDensity * 0.008 + (isChaosMode ? pressure * 0.002 : 0), 0.0025, 0.013);
         blip.type = "sawtooth";
         blip.frequency.setValueAtTime(hz, now);
         blip.frequency.exponentialRampToValueAtTime(hz * (0.9 + trafficJitter), now + dur);
@@ -566,7 +572,7 @@ export function useAudioEngine() {
         blipGain.connect(trafficFilterRef.current);
         blip.start(now);
         blip.stop(now + dur + 0.03);
-        console.log("[audio] traffic event", { congestion, flow, delay, pulseRate, trafficJitter, hz, amp });
+        console.log("[audio] traffic event", { trafficDensity, flow, delay, pulseRate, trafficJitter, hz, amp, isChaosMode, trafficReliable });
       }
       nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
     }
@@ -576,7 +582,7 @@ export function useAudioEngine() {
     const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
-    const trafficLayerMix = clamp(0.18 + congestion * 0.28, 0, 0.65);
+    const trafficLayerMix = clamp(isChaosMode ? 0.16 + trafficDensityColor * 0.18 : 0.18 + trafficDensity * 0.28, 0, 0.65);
     const monitorState = monitorStateRef.current;
     const gate = (active: boolean) => (active ? 1 : 0);
 

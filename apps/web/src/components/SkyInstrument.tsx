@@ -194,6 +194,7 @@ export default function SkyInstrument({
   const [hasCompletedSplash, setHasCompletedSplash] = useState(false);
   const [isCompactHud, setIsCompactHud] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [performanceMode, setPerformanceMode] = useState<"sky" | "chaos">("sky");
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
@@ -312,6 +313,7 @@ export default function SkyInstrument({
       : manMadeAir.roadStatus === "unavailable"
         ? "unavailable"
         : "fallback";
+  const trafficReliable = manMadeAir.roadStatus === "live" && Boolean(manMadeAir.road);
 
   const diagnosticsRows: DiagnosticRow[] = useMemo(() => {
     const fmtPercent = (value: number) => `${Math.round(value * 100)}%`;
@@ -463,8 +465,11 @@ export default function SkyInstrument({
       placeDroneLevel: placeDroneMix,
       airMix: manMadeMix.air ?? 1,
       air: resolvedAirSignal,
+      road: manMadeAir.road,
+      performanceMode,
+      trafficReliable,
     };
-  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeMix.air, placeDroneMix, resolvedAirSignal, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -873,6 +878,28 @@ export default function SkyInstrument({
             {isCompactHud ? "Expand" : "Minimize"}
           </button>
         </div>
+        <button
+          type="button"
+          onPointerDown={stopMixerEvent}
+          onPointerUp={stopMixerEvent}
+          onClick={(e) => {
+            e.stopPropagation();
+            setPerformanceMode((mode) => (mode === "sky" ? "chaos" : "sky"));
+          }}
+          style={{
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.16)",
+            background: performanceMode === "chaos" ? "rgba(255, 127, 80, 0.3)" : "rgba(255,255,255,0.08)",
+            color: "white",
+            padding: "8px 10px",
+            cursor: "pointer",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+          }}
+        >
+          {performanceMode === "sky" ? "Mode: Sky" : "Mode: Chaos"}
+        </button>
         <button
           type="button"
           onPointerDown={stopMixerEvent}
