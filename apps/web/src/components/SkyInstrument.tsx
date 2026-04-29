@@ -1464,10 +1464,8 @@ export default function SkyInstrument({
             position: "absolute",
             left: 24,
             right: 24,
-            bottom: isMobileViewport
-              ? "calc(env(safe-area-inset-bottom, 0px) + 120px)"
-              : "clamp(84px, 14vh, 146px)",
-            zIndex: 3,
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 150px)",
+            zIndex: 5,
             display: "flex",
             justifyContent: "center",
             pointerEvents: "none",
@@ -1477,54 +1475,55 @@ export default function SkyInstrument({
             style={{
               width: "min(560px, 100%)",
               borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(6, 10, 24, 0.32)",
-              backdropFilter: "blur(6px)",
-              padding: "8px 10px",
+              border: "1px solid rgba(255,255,255,0.14)",
+              background: "rgba(6, 10, 24, 0.44)",
+              backdropFilter: "blur(8px)",
+              padding: "10px 12px",
               display: "grid",
-              gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-              gap: 6,
-              opacity: 0.92,
+              gap: 10,
+              opacity: 0.95,
+              pointerEvents: "auto",
             }}
           >
-            {Array.from({ length: 16 }, (_, i) => {
-              const isActive = i === chaosVizStep;
-              return (
-                <div
-                  key={`chaos-step-${i}`}
-                  style={{
-                    height: 8,
-                    borderRadius: 999,
-                    background: isActive ? "rgba(255, 164, 126, 0.92)" : "rgba(180, 206, 255, 0.18)",
-                    boxShadow: isActive ? "0 0 12px rgba(255, 166, 129, 0.55)" : "none",
-                    transition: "background 120ms linear, box-shadow 120ms linear",
-                  }}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
-      {performanceMode === "chaos" && !mixerOpen && !shouldShowSplash && (
-        <div
-          style={{
-            position: "absolute",
-            left: 24,
-            right: 24,
-            bottom: isMobileViewport ? "calc(env(safe-area-inset-bottom, 0px) + 78px)" : "clamp(44px, 7vh, 80px)",
-            zIndex: 3,
-            display: "flex",
-            justifyContent: "center",
-            pointerEvents: "auto",
-          }}
-        >
-          <label style={{ width: "min(360px, 100%)", color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span>Chaos tempo</span>
-              <span>{chaosTempoBpm} BPM · {chaosTempoFeel}</span>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+                gap: 6,
+              }}
+            >
+              {Array.from({ length: 16 }, (_, i) => {
+                const isActive = i === chaosVizStep;
+                return (
+                  <div
+                    key={`chaos-step-${i}`}
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      background: isActive ? "rgba(255, 164, 126, 0.92)" : "rgba(180, 206, 255, 0.18)",
+                      boxShadow: isActive ? "0 0 12px rgba(255, 166, 129, 0.55)" : "none",
+                      transition: "background 120ms linear, box-shadow 120ms linear",
+                    }}
+                  />
+                );
+              })}
             </div>
-            <input type="range" min={60} max={160} step={1} value={chaosTempoBpm} onChange={(e) => setChaosTempoBpm(Number(e.target.value))} style={{ width: "100%" }} />
-          </label>
+            <label style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
+                <span>Chaos tempo</span>
+                <span>{chaosTempoBpm} BPM · {chaosTempoFeel}</span>
+              </div>
+              <input
+                type="range"
+                min={60}
+                max={160}
+                step={1}
+                value={chaosTempoBpm}
+                onChange={(e) => setChaosTempoBpm(Number(e.target.value))}
+                style={{ width: "100%", touchAction: "pan-y", height: 24 }}
+              />
+            </label>
+          </div>
         </div>
       )}
 
