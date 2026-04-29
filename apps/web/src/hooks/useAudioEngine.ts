@@ -54,6 +54,9 @@ export function useAudioEngine() {
   const lifeGainRef = useRef<GainNode | null>(null);
   const airGainRef = useRef<GainNode | null>(null);
   const trafficGainRef = useRef<GainNode | null>(null);
+  const chaosGainRef = useRef<GainNode | null>(null);
+  const chaosKickGainRef = useRef<GainNode | null>(null);
+  const chaosHatGainRef = useRef<GainNode | null>(null);
 
   const baseFilterRef = useRef<BiquadFilterNode | null>(null);
   const weatherFilterRef = useRef<BiquadFilterNode | null>(null);
@@ -68,6 +71,10 @@ export function useAudioEngine() {
   const chimeFilterRef = useRef<BiquadFilterNode | null>(null);
   const chimeGainRef = useRef<GainNode | null>(null);
   const trafficFilterRef = useRef<BiquadFilterNode | null>(null);
+  const chaosBassFilterRef = useRef<BiquadFilterNode | null>(null);
+  const chaosHatFilterRef = useRef<BiquadFilterNode | null>(null);
+  const chaosNoiseGainRef = useRef<GainNode | null>(null);
+  const chaosDuckGainRef = useRef<GainNode | null>(null);
 
   const lfoRef = useRef<OscillatorNode | null>(null);
   const lfoGainRef = useRef<GainNode | null>(null);
@@ -81,6 +88,7 @@ export function useAudioEngine() {
   const airPanDriftRef = useRef(0);
   const nextAirPassEventRef = useRef(0);
   const nextTrafficEventRef = useRef(0);
+  const nextChaosPulseRef = useRef(0);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -113,6 +121,9 @@ export function useAudioEngine() {
     lifeGainRef.current = null;
     airGainRef.current = null;
     trafficGainRef.current = null;
+    chaosGainRef.current = null;
+    chaosKickGainRef.current = null;
+    chaosHatGainRef.current = null;
 
     baseFilterRef.current = null;
     weatherFilterRef.current = null;
@@ -127,6 +138,10 @@ export function useAudioEngine() {
     chimeFilterRef.current = null;
     chimeGainRef.current = null;
     trafficFilterRef.current = null;
+    chaosBassFilterRef.current = null;
+    chaosHatFilterRef.current = null;
+    chaosNoiseGainRef.current = null;
+    chaosDuckGainRef.current = null;
 
     lfoRef.current = null;
     lfoGainRef.current = null;
@@ -140,6 +155,7 @@ export function useAudioEngine() {
     airPanDriftRef.current = 0;
     nextAirPassEventRef.current = 0;
     nextTrafficEventRef.current = 0;
+    nextChaosPulseRef.current = 0;
     startedRef.current = false;
   }
 
@@ -195,6 +211,15 @@ export function useAudioEngine() {
     const trafficGain = ctx.createGain();
     trafficGain.gain.value = 0;
     trafficGainRef.current = trafficGain;
+    const chaosGain = ctx.createGain();
+    chaosGain.gain.value = 0;
+    chaosGainRef.current = chaosGain;
+    const chaosKickGain = ctx.createGain();
+    chaosKickGain.gain.value = 0;
+    chaosKickGainRef.current = chaosKickGain;
+    const chaosHatGain = ctx.createGain();
+    chaosHatGain.gain.value = 0;
+    chaosHatGainRef.current = chaosHatGain;
 
     const baseFilter = ctx.createBiquadFilter();
     baseFilter.type = "lowpass";
@@ -306,6 +331,22 @@ export function useAudioEngine() {
     trafficFilter.frequency.value = 140;
     trafficFilter.Q.value = 0.7;
     trafficFilterRef.current = trafficFilter;
+    const chaosBassFilter = ctx.createBiquadFilter();
+    chaosBassFilter.type = "lowpass";
+    chaosBassFilter.frequency.value = 220;
+    chaosBassFilter.Q.value = 1.1;
+    chaosBassFilterRef.current = chaosBassFilter;
+    const chaosHatFilter = ctx.createBiquadFilter();
+    chaosHatFilter.type = "highpass";
+    chaosHatFilter.frequency.value = 3800;
+    chaosHatFilter.Q.value = 0.7;
+    chaosHatFilterRef.current = chaosHatFilter;
+    const chaosNoiseGain = ctx.createGain();
+    chaosNoiseGain.gain.value = 0;
+    chaosNoiseGainRef.current = chaosNoiseGain;
+    const chaosDuckGain = ctx.createGain();
+    chaosDuckGain.gain.value = 1;
+    chaosDuckGainRef.current = chaosDuckGain;
 
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
@@ -357,6 +398,9 @@ export function useAudioEngine() {
 
     noiseSrc.connect(trafficFilter);
     trafficFilter.connect(trafficGain);
+    noiseSrc.connect(chaosHatFilter);
+    chaosHatFilter.connect(chaosNoiseGain);
+    chaosNoiseGain.connect(chaosHatGain);
 
     baseDroneGain.connect(masterGain);
     weatherGain.connect(masterGain);
@@ -364,6 +408,11 @@ export function useAudioEngine() {
     lifeGain.connect(masterGain);
     airGain.connect(masterGain);
     trafficGain.connect(masterGain);
+    chaosKickGain.connect(chaosBassFilter);
+    chaosBassFilter.connect(chaosGain);
+    chaosHatGain.connect(chaosGain);
+    chaosGain.connect(chaosDuckGain);
+    chaosDuckGain.connect(masterGain);
     masterGain.connect(ctx.destination);
 
     lfo.connect(lfoGain);
@@ -466,6 +515,11 @@ export function useAudioEngine() {
       0,
       0.09,
     );
+    const chaosPulseRate = clamp(1.5 + pressure * 3.8 + (1 - y) * 1.8 + Math.abs(x - 0.5) * 1.2, 1.2, 8.5);
+    const chaosBassRootHz = placeBaseHz / 2;
+    const chaosBassHz = clamp(chaosBassRootHz * Math.pow(2, (x - 0.5) * 1.7), 30, 180);
+    const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
+    const chaosDrive = clamp(0.2 + pressure * 0.8, 0.2, 1);
 
     if (rainNorm > 0.02 && Math.random() < rainNorm * 0.35) {
       const click = ctx.createOscillator();
@@ -577,12 +631,52 @@ export function useAudioEngine() {
       nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
     }
 
+    if (isChaosMode && now >= nextChaosPulseRef.current && chaosKickGainRef.current && chaosHatGainRef.current) {
+      const kick = ctx.createOscillator();
+      const kickGain = ctx.createGain();
+      kick.type = pressure > 0.6 ? "triangle" : "sine";
+      kick.frequency.setValueAtTime(chaosBassHz * 1.6, now);
+      kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * 0.75), now + 0.1);
+      kickGain.gain.setValueAtTime(0.0001, now);
+      kickGain.gain.exponentialRampToValueAtTime(0.09 + 0.08 * chaosDrive, now + 0.01);
+      kickGain.gain.exponentialRampToValueAtTime(0.0001, now + (0.14 + 0.06 * (1 - pressure)));
+      kick.connect(kickGain);
+      kickGain.connect(chaosKickGainRef.current);
+      kick.start(now);
+      kick.stop(now + 0.25);
+
+      const hat = ctx.createOscillator();
+      const hatGain = ctx.createGain();
+      hat.type = "square";
+      hat.frequency.setValueAtTime(3400 + windNorm * 800 + humidityNorm * 200, now);
+      hatGain.gain.setValueAtTime(0.0001, now);
+      hatGain.gain.exponentialRampToValueAtTime(0.02 + 0.03 * pressure + 0.014 * windNorm, now + 0.004);
+      hatGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+      hat.connect(hatGain);
+      hatGain.connect(chaosHatGainRef.current);
+      hat.start(now);
+      hat.stop(now + 0.06);
+
+      if (chaosDuckGainRef.current) {
+        chaosDuckGainRef.current.gain.cancelScheduledValues(now);
+        chaosDuckGainRef.current.gain.setValueAtTime(0.88, now);
+        chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, now + 0.12);
+      }
+
+      nextChaosPulseRef.current = now + (1 / chaosPulseRate) * (0.92 + Math.random() * 0.18);
+    }
+
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);
     const baseDroneMix = clamp((0.22 + 0.16 * pressure) * placeDroneLevel, 0, 0.84);
     const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
     const trafficLayerMix = clamp(isChaosMode ? 0.16 + trafficDensityColor * 0.18 : 0.18 + trafficDensity * 0.28, 0, 0.65);
+    const chaosMix = isChaosMode ? clamp(0.22 + pressure * 0.35, 0.2, 0.56) : 0;
+    const chaosHatNoiseMix = isChaosMode ? clamp(0.04 + 0.07 * pressure + 0.03 * (windNorm + humidityNorm), 0.035, 0.14) : 0;
+    const chaosKickMix = isChaosMode ? clamp(0.7 + pressure * 0.6, 0.7, 1.25) : 0;
+    const chaosHatMix = isChaosMode ? clamp(0.55 + pressure * 0.55, 0.5, 1.2) : 0;
+    const droneDuck = isChaosMode ? clamp(0.42 - pressure * 0.18, 0.2, 0.42) : 1;
     const monitorState = monitorStateRef.current;
     const gate = (active: boolean) => (active ? 1 : 0);
 
@@ -591,7 +685,7 @@ export function useAudioEngine() {
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
 
-    baseFilterRef.current?.frequency.setTargetAtTime(baseCutoff, now, 0.08);
+    baseFilterRef.current?.frequency.setTargetAtTime(isChaosMode ? chaosBrightness : baseCutoff, now, 0.08);
     baseFilterRef.current?.Q.setTargetAtTime(baseQ, now, 0.08);
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
@@ -624,12 +718,19 @@ export function useAudioEngine() {
     trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
-    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * gate(monitorState.baseDrone), now, 0.16);
+    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.16);
     weatherGainRef.current?.gain.setTargetAtTime(clamp(p.windMps / 20, 0, 2), now, 0.16);
     celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel * gate(monitorState.chimes), now, 0.2);
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
     airGainRef.current?.gain.setTargetAtTime(airLayerMix * gate(monitorState.air), now, 0.16);
     trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain * gate(monitorState.traffic), now, 0.2);
+    chaosGainRef.current?.gain.setTargetAtTime(chaosMix * gate(monitorState.traffic), now, 0.08);
+    chaosNoiseGainRef.current?.gain.setTargetAtTime(chaosHatNoiseMix, now, 0.08);
+    chaosKickGainRef.current?.gain.setTargetAtTime(chaosKickMix, now, 0.04);
+    chaosHatGainRef.current?.gain.setTargetAtTime(chaosHatMix, now, 0.04);
+    chaosBassFilterRef.current?.frequency.setTargetAtTime(clamp(120 + (1 - y) * 420 + pressure * 220, 90, 700), now, 0.06);
+    chaosBassFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + pressure * 1.5, 0.8, 2.4), now, 0.06);
+    chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(2200 + (1 - y) * 5000 + windNorm * 600, 1800, 8200), now, 0.08);
 
     lfoRef.current?.frequency.setTargetAtTime(clamp(0.06 + 0.35 * sunNorm, 0.05, 0.6), now, 0.12);
     lfoGainRef.current?.gain.setTargetAtTime(clamp(0.003 + 0.01 * moonNorm, 0.002, 0.015), now, 0.14);
