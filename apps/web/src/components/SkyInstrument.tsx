@@ -196,6 +196,7 @@ export default function SkyInstrument({
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [performanceMode, setPerformanceMode] = useState<"sky" | "chaos">("sky");
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
+  const [chaosVizStep, setChaosVizStep] = useState(0);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -440,6 +441,15 @@ export default function SkyInstrument({
   const shouldShowSplash =
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
+  const isMobileViewport = typeof window !== "undefined" ? window.innerWidth <= 900 : false;
+
+  useEffect(() => {
+    if (performanceMode !== "chaos" || !hasUnlockedAudio) return;
+    const timer = window.setInterval(() => {
+      setChaosVizStep((prev) => (prev + 1) % 16);
+    }, 160);
+    return () => window.clearInterval(timer);
+  }, [performanceMode, hasUnlockedAudio]);
 
   const audioParams = useCallback((nextPt: Pt): AudioEngineSignalPayload => {
     return {
@@ -1433,6 +1443,54 @@ export default function SkyInstrument({
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {performanceMode === "chaos" && !mixerOpen && !shouldShowSplash && (
+        <div
+          style={{
+            position: "absolute",
+            left: 24,
+            right: 24,
+            bottom: isMobileViewport
+              ? "calc(env(safe-area-inset-bottom, 0px) + 120px)"
+              : "clamp(84px, 14vh, 146px)",
+            zIndex: 3,
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              width: "min(560px, 100%)",
+              borderRadius: 14,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(6, 10, 24, 0.32)",
+              backdropFilter: "blur(6px)",
+              padding: "8px 10px",
+              display: "grid",
+              gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
+              gap: 6,
+              opacity: 0.92,
+            }}
+          >
+            {Array.from({ length: 16 }, (_, i) => {
+              const isActive = i === chaosVizStep;
+              return (
+                <div
+                  key={`chaos-step-${i}`}
+                  style={{
+                    height: 8,
+                    borderRadius: 999,
+                    background: isActive ? "rgba(255, 164, 126, 0.92)" : "rgba(180, 206, 255, 0.18)",
+                    boxShadow: isActive ? "0 0 12px rgba(255, 166, 129, 0.55)" : "none",
+                    transition: "background 120ms linear, box-shadow 120ms linear",
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
       )}
