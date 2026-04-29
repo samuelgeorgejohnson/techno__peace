@@ -39,6 +39,9 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   airMix?: number;
   placeDroneLevel?: number;
   air?: AirSignal | null;
+  road?: ManMadeSignals["road"] | null;
+  performanceMode?: "sky" | "chaos";
+  trafficReliable?: boolean;
 };
 
 /**
