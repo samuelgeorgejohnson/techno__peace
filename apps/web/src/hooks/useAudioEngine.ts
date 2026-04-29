@@ -89,6 +89,7 @@ export function useAudioEngine() {
   const nextAirPassEventRef = useRef(0);
   const nextTrafficEventRef = useRef(0);
   const nextChaosPulseRef = useRef(0);
+  const chaosStepRef = useRef(0);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -156,6 +157,7 @@ export function useAudioEngine() {
     nextAirPassEventRef.current = 0;
     nextTrafficEventRef.current = 0;
     nextChaosPulseRef.current = 0;
+    chaosStepRef.current = 0;
     startedRef.current = false;
   }
 
@@ -515,7 +517,9 @@ export function useAudioEngine() {
       0,
       0.09,
     );
-    const chaosPulseRate = clamp(1.5 + pressure * 3.8 + (1 - y) * 1.8 + Math.abs(x - 0.5) * 1.2, 1.2, 8.5);
+    const chaosTempoBpm = clamp(p.chaosTempoBpm ?? 100, 60, 160);
+    const chaosStepSeconds = 60 / chaosTempoBpm / 4;
+    const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
     const chaosBassRootHz = placeBaseHz / 2;
     const chaosBassHz = clamp(chaosBassRootHz * Math.pow(2, (x - 0.5) * 1.7), 30, 180);
     const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
@@ -631,39 +635,59 @@ export function useAudioEngine() {
       nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
     }
 
-    if (isChaosMode && now >= nextChaosPulseRef.current && chaosKickGainRef.current && chaosHatGainRef.current) {
-      const kick = ctx.createOscillator();
-      const kickGain = ctx.createGain();
-      kick.type = pressure > 0.6 ? "triangle" : "sine";
-      kick.frequency.setValueAtTime(chaosBassHz * 1.6, now);
-      kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * 0.75), now + 0.1);
-      kickGain.gain.setValueAtTime(0.0001, now);
-      kickGain.gain.exponentialRampToValueAtTime(0.09 + 0.08 * chaosDrive, now + 0.01);
-      kickGain.gain.exponentialRampToValueAtTime(0.0001, now + (0.14 + 0.06 * (1 - pressure)));
-      kick.connect(kickGain);
-      kickGain.connect(chaosKickGainRef.current);
-      kick.start(now);
-      kick.stop(now + 0.25);
+    if (isChaosMode && chaosKickGainRef.current && chaosHatGainRef.current) {
+      if (nextChaosPulseRef.current === 0) nextChaosPulseRef.current = now;
+      let safety = 0;
+      while (now >= nextChaosPulseRef.current && safety < 4) {
+        const step = chaosStepRef.current % 16;
+        const stepTime = nextChaosPulseRef.current;
+        const isKickStep = step % 4 === 0 || (pressure > 0.72 && step % 8 === 6);
+        const isHatStep = step % 2 === 0 || (step % 4 === 3 && windNorm > 0.2);
+        const isBassStep = step % 8 === 0 || step % 8 === 5;
 
-      const hat = ctx.createOscillator();
-      const hatGain = ctx.createGain();
-      hat.type = "square";
-      hat.frequency.setValueAtTime(3400 + windNorm * 800 + humidityNorm * 200, now);
-      hatGain.gain.setValueAtTime(0.0001, now);
-      hatGain.gain.exponentialRampToValueAtTime(0.02 + 0.03 * pressure + 0.014 * windNorm, now + 0.004);
-      hatGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
-      hat.connect(hatGain);
-      hatGain.connect(chaosHatGainRef.current);
-      hat.start(now);
-      hat.stop(now + 0.06);
+        if (isKickStep || isBassStep) {
+          const kick = ctx.createOscillator();
+          const kickGain = ctx.createGain();
+          kick.type = pressure > 0.6 ? "triangle" : "sine";
+          const bassRatio = isBassStep ? 1.1 : 1.6;
+          kick.frequency.setValueAtTime(chaosBassHz * bassRatio, stepTime);
+          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * (isBassStep ? 0.92 : 0.75)), stepTime + 0.1);
+          kickGain.gain.setValueAtTime(0.0001, stepTime);
+          kickGain.gain.exponentialRampToValueAtTime((isBassStep ? 0.045 : 0.09) + 0.08 * chaosDrive, stepTime + 0.01);
+          kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + (0.14 + 0.06 * (1 - pressure)));
+          kick.connect(kickGain);
+          kickGain.connect(chaosKickGainRef.current);
+          kick.start(stepTime);
+          kick.stop(stepTime + 0.25);
+        }
 
-      if (chaosDuckGainRef.current) {
-        chaosDuckGainRef.current.gain.cancelScheduledValues(now);
-        chaosDuckGainRef.current.gain.setValueAtTime(0.88, now);
-        chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, now + 0.12);
+        if (isHatStep) {
+          const hat = ctx.createOscillator();
+          const hatGain = ctx.createGain();
+          hat.type = "square";
+          hat.frequency.setValueAtTime(3400 + windNorm * 800 + humidityNorm * 200, stepTime);
+          hatGain.gain.setValueAtTime(0.0001, stepTime);
+          hatGain.gain.exponentialRampToValueAtTime(0.018 + 0.03 * pressure + 0.014 * windNorm, stepTime + 0.004);
+          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.035);
+          hat.connect(hatGain);
+          hatGain.connect(chaosHatGainRef.current);
+          hat.start(stepTime);
+          hat.stop(stepTime + 0.05);
+        }
+
+        if (chaosDuckGainRef.current && isKickStep) {
+          chaosDuckGainRef.current.gain.cancelScheduledValues(stepTime);
+          chaosDuckGainRef.current.gain.setValueAtTime(0.88, stepTime);
+          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.12);
+        }
+
+        chaosStepRef.current = (chaosStepRef.current + 1) % 16;
+        const swingOffset = chaosStepRef.current % 2 === 1 ? chaosSwing : 0;
+        nextChaosPulseRef.current += chaosStepSeconds + swingOffset;
+        safety += 1;
       }
-
-      nextChaosPulseRef.current = now + (1 / chaosPulseRate) * (0.92 + Math.random() * 0.18);
+    } else if (!isChaosMode) {
+      nextChaosPulseRef.current = 0;
     }
 
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);

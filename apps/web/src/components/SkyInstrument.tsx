@@ -195,6 +195,7 @@ export default function SkyInstrument({
   const [isCompactHud, setIsCompactHud] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [performanceMode, setPerformanceMode] = useState<"sky" | "chaos">("sky");
+  const [chaosTempoBpm, setChaosTempoBpm] = useState(100);
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const [chaosVizStep, setChaosVizStep] = useState(0);
   const latestPointRef = useRef(pt);
@@ -445,11 +446,20 @@ export default function SkyInstrument({
 
   useEffect(() => {
     if (performanceMode !== "chaos" || !hasUnlockedAudio) return;
+    const stepMs = (60 / chaosTempoBpm / 4) * 1000;
     const timer = window.setInterval(() => {
       setChaosVizStep((prev) => (prev + 1) % 16);
-    }, 160);
+    }, stepMs);
     return () => window.clearInterval(timer);
-  }, [performanceMode, hasUnlockedAudio]);
+  }, [chaosTempoBpm, performanceMode, hasUnlockedAudio]);
+
+  const chaosTempoFeel = useMemo(() => {
+    if (chaosTempoBpm <= 75) return "slow";
+    if (chaosTempoBpm <= 95) return "walking";
+    if (chaosTempoBpm <= 120) return "pulse";
+    if (chaosTempoBpm <= 140) return "driving";
+    return "rushing";
+  }, [chaosTempoBpm]);
 
   const audioParams = useCallback((nextPt: Pt): AudioEngineSignalPayload => {
     return {
@@ -477,9 +487,10 @@ export default function SkyInstrument({
       air: resolvedAirSignal,
       road: manMadeAir.road,
       performanceMode,
+      chaosTempoBpm,
       trafficReliable,
     };
-  }, [birdsMix, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -1492,6 +1503,28 @@ export default function SkyInstrument({
               );
             })}
           </div>
+        </div>
+      )}
+      {performanceMode === "chaos" && !mixerOpen && !shouldShowSplash && (
+        <div
+          style={{
+            position: "absolute",
+            left: 24,
+            right: 24,
+            bottom: isMobileViewport ? "calc(env(safe-area-inset-bottom, 0px) + 78px)" : "clamp(44px, 7vh, 80px)",
+            zIndex: 3,
+            display: "flex",
+            justifyContent: "center",
+            pointerEvents: "auto",
+          }}
+        >
+          <label style={{ width: "min(360px, 100%)", color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span>Chaos tempo</span>
+              <span>{chaosTempoBpm} BPM · {chaosTempoFeel}</span>
+            </div>
+            <input type="range" min={60} max={160} step={1} value={chaosTempoBpm} onChange={(e) => setChaosTempoBpm(Number(e.target.value))} style={{ width: "100%" }} />
+          </label>
         </div>
       )}
 
