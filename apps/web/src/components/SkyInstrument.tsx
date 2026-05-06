@@ -6,7 +6,7 @@ import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngin
 import type { AudioMonitorState } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import { useManMadeAirSignal } from "../hooks/useManMadeAirSignal";
-import { getSkyState } from "./getSkyState";
+import { getClockSkyFallback, getSkyState } from "./getSkyState";
 import SplashIntro from "./SplashIntro";
 
 function clamp01(x: number) {
@@ -293,6 +293,17 @@ export default function SkyInstrument({
       }),
     [moonIllumination, weather.cloudCover, weather.isDay, weather.sunAltitudeDeg, weather.windMps],
   );
+  const splashSky = useMemo(() => {
+    if (weather.status === "live") return sky;
+    const clockSky = getClockSkyFallback();
+    return getSkyState({
+      sunAltitudeDeg: clockSky.sunAltitudeDeg,
+      isDay: clockSky.isDay,
+      cloudCover: weather.cloudCover,
+      windMps: weather.windMps,
+      moonIllumination,
+    });
+  }, [moonIllumination, sky, weather.cloudCover, weather.status, weather.windMps]);
   const nightness = 1 - sky.dayness;
   const moonSkyLift = clamp01(moonLightFactor * clearSkyFactor);
   const starVisibility = clamp01((0.15 + nightness * 1.1) * clearSkyFactor * (0.35 + moonSkyLift * 0.9));
@@ -1529,7 +1540,7 @@ export default function SkyInstrument({
 
       {shouldShowSplash && (
         <div style={{ position: "absolute", inset: 0, zIndex: 8 }}>
-          <SplashIntro onComplete={() => setHasCompletedSplash(true)} sky={sky} />
+          <SplashIntro onComplete={() => setHasCompletedSplash(true)} sky={splashSky} />
         </div>
       )}
 
