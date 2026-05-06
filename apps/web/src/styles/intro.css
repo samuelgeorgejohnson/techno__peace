@@ -315,3 +315,32 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+.tp-site-header {
+  display: grid;
+  gap: 12px;
+}
+
+.tp-site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tp-site-nav-link {
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
+.tp-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tp-site-actions a {
+  text-decoration: none;
+}
