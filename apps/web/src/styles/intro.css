@@ -240,107 +240,73 @@ body {
 }
 
 /* Website shell */
-.tp-site-shell {
+.tp-site-home {
   min-height: 100vh;
-  padding: clamp(20px, 4vw, 48px);
-  max-width: 1100px;
-  margin: 0 auto;
-  display: grid;
-  gap: 20px;
 }
 
-.tp-site-card {
-  background: var(--glass);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: clamp(18px, 3vw, 28px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-}
-
-.tp-site-hero h1 {
-  margin: 6px 0 10px;
-  font-size: clamp(1.9rem, 4.5vw, 3rem);
-}
-
-.tp-site-hero p {
-  color: var(--muted);
-  max-width: 720px;
-}
-
-.tp-site-actions {
-  margin-top: 20px;
+.tp-site-hero-stage {
+  position: relative;
+  min-height: 78vh;
+  padding: clamp(20px, 4vw, 44px);
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.tp-site-actions a {
-  text-decoration: none;
+.tp-site-hero-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(10, 14, 26, 0.45), rgba(10, 14, 26, 0.58)), url('/assets/sky/sky_base.jpg') center/cover no-repeat;
+  filter: saturate(1.1);
 }
 
-.tp-site-primary,
-.tp-site-secondary {
-  border-radius: 999px;
-  padding: 10px 16px;
-  border: 1px solid var(--border);
+.tp-site-nav-shell,
+.tp-site-hero-content {
+  position: relative;
+  z-index: 1;
 }
 
-.tp-site-primary {
-  background: linear-gradient(135deg, rgba(77, 225, 255, 0.35), rgba(192, 132, 252, 0.35));
-  color: var(--text);
-}
-
-.tp-site-secondary {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.tp-site-grid {
+.tp-site-nav-shell {
   display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.tp-site-grid h2 {
-  margin-top: 0;
+.tp-site-logo { width: 58px; opacity: 0.95; }
+.tp-site-nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.tp-site-nav-link, .tp-site-enter-pill {
+  text-decoration: none; color: #ebf4ff; border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; padding: 8px 14px;
+  background: rgba(10, 24, 40, 0.22);
 }
 
-.tp-site-grid p {
-  margin-bottom: 0;
-  color: var(--muted);
+.tp-site-enter-pill { white-space: nowrap; }
+
+.tp-site-hero-content { text-align: center; max-width: 860px; margin: 10vh auto 7vh; }
+.tp-site-hero-content h1 { font-size: clamp(2.6rem, 10vw, 7rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.01em; }
+.tp-site-subtitle { margin: 12px 0 6px; font-size: clamp(1.05rem, 2.2vw, 1.7rem); color: #f4f8ff; }
+.tp-site-hero-content p { color: #e6eef9; }
+
+.tp-site-actions { margin-top: 22px; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.tp-site-actions a { text-decoration: none; }
+.tp-site-primary, .tp-site-secondary { border-radius: 999px; padding: 12px 20px; border: 1px solid rgba(255,255,255,0.35); }
+.tp-site-primary { background: #f4f7fd; color: #152031; }
+.tp-site-secondary { background: rgba(255,255,255,0.1); color: #eff5ff; }
+
+.tp-site-lower { margin: -48px auto 0; max-width: 1300px; padding: 0 clamp(14px, 3vw, 42px) 32px; position: relative; z-index: 2; }
+.tp-site-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.tp-site-overview-card {
+  background: rgba(11, 19, 28, 0.58);
+  border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(6px);
+  border-radius: 14px;
+  padding: 16px;
 }
+.tp-site-overview-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.tp-site-overview-card p { margin: 0; color: #d3e0ee; }
 
 @media (max-width: 900px) {
-  .tp-site-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.tp-site-header {
-  display: grid;
-  gap: 12px;
-}
-
-.tp-site-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.tp-site-nav-link {
-  text-decoration: none;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 6px 12px;
-}
-
-.tp-site-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.tp-site-actions a {
-  text-decoration: none;
+  .tp-site-nav-shell { grid-template-columns: 1fr; justify-items: center; }
+  .tp-site-overview-grid { grid-template-columns: 1fr; }
+  .tp-site-hero-content { margin-top: 6vh; }
 }

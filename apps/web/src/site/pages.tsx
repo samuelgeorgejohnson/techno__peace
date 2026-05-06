@@ -1,45 +1,62 @@
 import SiteLayout from "./SiteLayout";
 
+function OverviewCards() {
+  return (
+    <div className="tp-site-overview-grid">
+      <article className="tp-site-overview-card">
+        <h2>Our Mission</h2>
+        <p>Technology in service of peace and presence.</p>
+      </article>
+      <article className="tp-site-overview-card">
+        <h2>Essays & Reflections</h2>
+        <p>Thoughts on listening, culture, and our future.</p>
+      </article>
+      <article className="tp-site-overview-card">
+        <h2>Field Recordings</h2>
+        <p>Real places. Real sounds. Shared freely.</p>
+      </article>
+      <article className="tp-site-overview-card">
+        <h2>About TechnoPeace</h2>
+        <p>Our story, our team, our journey.</p>
+      </article>
+    </div>
+  );
+}
+
 export function SiteHomePage() {
   return (
     <SiteLayout
-      title="World, signal, and instrument."
-      description="TechnoPeace is an environmental sound instrument, a resonance practice, and a field-recording world built for tuning attention."
+      title="TechnoPeace"
+      subtitle="A world of listening. A story of our time."
+      description="An environmental sound instrument and resonance practice for tuning attention."
     >
-      <section className="tp-site-grid">
-        <article className="tp-site-card">
-          <h2>Mission</h2>
-          <p>Build a living practice around sound, place, and relationship.</p>
-        </article>
-        <article className="tp-site-card">
-          <h2>Essays / Manifesto</h2>
-          <p>Future writing for theory, process notes, and long-form reflections.</p>
-        </article>
-        <article className="tp-site-card">
-          <h2>Field Recordings</h2>
-          <p>Archive space for recordings, textures, and locational memory.</p>
-        </article>
-      </section>
-      <section className="tp-site-card tp-site-actions">
-        <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-        <a className="tp-site-secondary" href="/about">About</a>
-        <a className="tp-site-secondary" href="/field-recordings">Field Recordings</a>
-        <a className="tp-site-secondary" href="/essays">Essays / Manifesto</a>
-      </section>
+      <OverviewCards />
     </SiteLayout>
   );
 }
 
 export function AboutPage() {
-  return <SiteLayout title="About / Contact" description="Placeholder for project story, collaborators, and contact pathways." />;
+  return (
+    <SiteLayout title="About / Contact" description="Placeholder for project story, collaborators, and contact pathways.">
+      <OverviewCards />
+    </SiteLayout>
+  );
 }
 
 export function FieldRecordingsPage() {
-  return <SiteLayout title="Field Recordings" description="Placeholder archive route for future recordings and releases." />;
+  return (
+    <SiteLayout title="Field Recordings" description="Placeholder archive route for future recordings and releases.">
+      <OverviewCards />
+    </SiteLayout>
+  );
 }
 
 export function EssaysPage() {
-  return <SiteLayout title="Essays / Manifesto" description="Placeholder route for writing, theory, and worldbuilding texts." />;
+  return (
+    <SiteLayout title="Essays / Manifesto" description="Placeholder route for writing, theory, and worldbuilding texts.">
+      <OverviewCards />
+    </SiteLayout>
+  );
 }
 
 export function ChaosPlaceholderPage() {
@@ -48,7 +65,7 @@ export function ChaosPlaceholderPage() {
       title="Chaos Mode (Future)"
       description="Chaos Mode route is reserved for a future playable system while Sky Mode remains the active instrument."
     >
-      <section className="tp-site-card tp-site-actions">
+      <section className="tp-site-actions">
         <a className="tp-site-primary" href="/app/sky">Launch Sky Mode</a>
       </section>
     </SiteLayout>
