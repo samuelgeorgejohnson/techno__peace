@@ -785,7 +785,7 @@ export function useAudioEngine() {
     }
 
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);
-    const baseDroneMix = clamp((0.22 + 0.16 * pressure) * placeDroneLevel, 0, 0.84);
+    const baseDroneMix = clamp((0.176 + 0.128 * pressure) * placeDroneLevel, 0, 0.84);
     const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
@@ -848,7 +848,7 @@ export function useAudioEngine() {
     mainSignalStereoRef.current?.pan.setTargetAtTime(clamp(Math.sin(now * (0.06 + airInfluence * 0.1)) * (0.05 + airInfluence * 0.2), -0.45, 0.45), now, 0.22);
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
-    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.16);
+    baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.22);
     weatherGainRef.current?.gain.setTargetAtTime(clamp(p.windMps / 20, 0, 2), now, 0.16);
     celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel * gate(monitorState.chimes), now, 0.2);
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
