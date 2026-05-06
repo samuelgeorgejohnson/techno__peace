@@ -43,6 +43,32 @@ function blendRgb(a: [number, number, number], b: [number, number, number], t: n
   return [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)] as [number, number, number];
 }
 
+
+export function getClockSkyFallback(now = new Date()) {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const sunrise = 6 * 60;
+  const sunset = 18 * 60;
+
+  const isDay = minutes >= sunrise && minutes <= sunset;
+  let sunAltitudeDeg: number;
+
+  if (isDay) {
+    const progress = clamp01((minutes - sunrise) / Math.max(sunset - sunrise, 1));
+    sunAltitudeDeg = Math.sin(progress * Math.PI) * 90;
+  } else {
+    const lastSunset = minutes > sunset ? sunset : sunset - 24 * 60;
+    const nextSunrise = minutes < sunrise ? sunrise : sunrise + 24 * 60;
+    const nightSpan = Math.max(nextSunrise - lastSunset, 1);
+    const nightProgress = clamp01((minutes - lastSunset) / nightSpan);
+    sunAltitudeDeg = -Math.sin(nightProgress * Math.PI) * 90;
+  }
+
+  return {
+    sunAltitudeDeg,
+    isDay,
+  };
+}
+
 export function getSkyState({
   sunAltitudeDeg,
   cloudCover,
