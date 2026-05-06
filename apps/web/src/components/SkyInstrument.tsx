@@ -1473,9 +1473,9 @@ export default function SkyInstrument({
         <div
           style={{
             position: "absolute",
-            left: 24,
-            right: 24,
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 150px)",
+            left: "max(12px, env(safe-area-inset-left, 0px) + 10px)",
+            right: "max(12px, env(safe-area-inset-right, 0px) + 10px)",
+            bottom: "max(96px, calc(env(safe-area-inset-bottom, 0px) + 92px))",
             zIndex: 5,
             display: "flex",
             justifyContent: "center",
@@ -1484,37 +1484,80 @@ export default function SkyInstrument({
         >
           <div
             style={{
-              width: "min(560px, 100%)",
-              borderRadius: 14,
-              border: "1px solid rgba(255,255,255,0.14)",
-              background: "rgba(6, 10, 24, 0.44)",
-              backdropFilter: "blur(8px)",
-              padding: "10px 12px",
+              width: "min(620px, 100%)",
+              borderRadius: 16,
+              border: "1px solid rgba(255,255,255,0.16)",
+              background: "rgba(6, 10, 24, 0.52)",
+              backdropFilter: "blur(10px)",
+              padding: "12px 12px 14px",
               display: "grid",
               gap: 10,
-              opacity: 0.95,
+              opacity: 0.97,
               pointerEvents: "auto",
             }}
           >
             <div
               style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                color: "rgba(255,255,255,0.9)",
+                fontSize: 12,
+              }}
+            >
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 8, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 999,
+                    background: hasUnlockedAudio ? "rgba(255, 152, 106, 0.95)" : "rgba(180, 206, 255, 0.45)",
+                    boxShadow: hasUnlockedAudio ? "0 0 12px rgba(255, 161, 118, 0.72)" : "none",
+                    transform: chaosVizStep % 4 === 0 ? "scale(1.18)" : "scale(1)",
+                    transition: "transform 100ms linear, background 100ms linear, box-shadow 120ms linear",
+                  }}
+                />
+                <span>{hasUnlockedAudio ? "Playing" : "Paused"}</span>
+              </div>
+              <strong style={{ fontSize: 14 }}>{chaosTempoBpm} BPM</strong>
+            </div>
+            <div
+              style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-                gap: 6,
+                gap: 5,
+                padding: 6,
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.05)",
               }}
             >
               {Array.from({ length: 16 }, (_, i) => {
                 const isActive = i === chaosVizStep;
+                const isBeat = i % 4 === 0;
                 return (
-                  <div
+                  <button
                     key={`chaos-step-${i}`}
+                    type="button"
+                    onPointerDown={stopMixerEvent}
+                    onPointerUp={stopMixerEvent}
                     style={{
-                      height: 10,
+                      height: isBeat ? 15 : 13,
+                      border: "none",
+                      padding: 0,
+                      cursor: "default",
                       borderRadius: 999,
-                      background: isActive ? "rgba(255, 164, 126, 0.92)" : "rgba(180, 206, 255, 0.18)",
-                      boxShadow: isActive ? "0 0 12px rgba(255, 166, 129, 0.55)" : "none",
-                      transition: "background 120ms linear, box-shadow 120ms linear",
+                      background: isActive
+                        ? "rgba(255, 164, 126, 0.95)"
+                        : isBeat
+                          ? "rgba(183, 213, 255, 0.34)"
+                          : "rgba(180, 206, 255, 0.2)",
+                      boxShadow: isActive ? "0 0 14px rgba(255, 166, 129, 0.62)" : "none",
+                      transform: isActive ? "translateY(-1px) scale(1.03)" : "scale(1)",
+                      transition: "background 70ms linear, box-shadow 90ms linear, transform 70ms linear",
                     }}
+                    aria-label={`Step ${i + 1}`}
                   />
                 );
               })}
@@ -1522,7 +1565,7 @@ export default function SkyInstrument({
             <label style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
                 <span>Chaos tempo</span>
-                <span>{chaosTempoBpm} BPM · {chaosTempoFeel}</span>
+                <span>{chaosTempoFeel}</span>
               </div>
               <input
                 type="range"
@@ -1531,7 +1574,7 @@ export default function SkyInstrument({
                 step={1}
                 value={chaosTempoBpm}
                 onChange={(e) => setChaosTempoBpm(Number(e.target.value))}
-                style={{ width: "100%", touchAction: "pan-y", height: 24 }}
+                style={{ width: "100%", touchAction: "pan-y", height: 28 }}
               />
             </label>
           </div>
