@@ -851,6 +851,19 @@ export default function SkyInstrument({
         aria-hidden="true"
         style={{
           position: "absolute",
+          inset: "-6%",
+          pointerEvents: "none",
+          zIndex: 0,
+          opacity: 0.08 + effectiveWind * 0.12 + effectiveRain * 0.1 + effectiveHumidity * 0.08,
+          mixBlendMode: "screen",
+          transition: "opacity 500ms linear",
+          background: `radial-gradient(820px 420px at ${30 + pt.x * 40}% ${30 + pt.y * 24}%, rgba(174, 216, 255, ${0.12 + effectiveHumidity * 0.22}), rgba(174, 216, 255, 0) 72%), radial-gradient(700px 360px at ${70 - pt.x * 20}% ${72 - pt.y * 18}%, rgba(170, 202, 255, ${0.08 + effectiveRain * 0.24}), rgba(170, 202, 255, 0) 74%)`,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
           inset: "-8%",
           pointerEvents: "none",
           zIndex: 0,
@@ -862,6 +875,31 @@ export default function SkyInstrument({
               : "radial-gradient(1200px 520px at 12% 26%, rgba(255,255,255,0.20), transparent 72%), radial-gradient(1200px 560px at 86% 30%, rgba(255,255,255,0.16), transparent 74%)",
         }}
       />
+
+      <a
+        href="/"
+        onPointerDown={stopMixerEvent}
+        onPointerUp={stopMixerEvent}
+        onClick={stopMixerEvent}
+        style={{
+          position: "absolute",
+          top: `max(10px, calc(${safeInsetTop} + 8px))`,
+          right: `max(10px, calc(${safeInsetRight} + 8px))`,
+          zIndex: 6,
+          padding: "8px 12px",
+          borderRadius: 999,
+          border: "1px solid rgba(255,255,255,0.16)",
+          background: "rgba(4, 10, 22, 0.34)",
+          color: "rgba(240,247,255,0.92)",
+          textDecoration: "none",
+          fontSize: 11,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          backdropFilter: "blur(8px)",
+        }}
+      >
+        ← Site
+      </a>
 
       <div
         onPointerDown={stopMixerEvent}
@@ -1055,22 +1093,16 @@ export default function SkyInstrument({
           onClick={stopMixerEvent}
           style={{
             position: "absolute",
-            top: isCompactHud
-              ? `max(150px, calc(${safeInsetTop} + 142px))`
-              : `max(236px, calc(${safeInsetTop} + 226px))`,
-            left: `max(10px, calc(${safeInsetLeft} + 8px))`,
+            inset: 0,
             zIndex: 7,
-            width: `min(980px, calc(100vw - 24px - ${safeInsetLeft} - ${safeInsetRight}))`,
-            maxHeight: `min(62dvh, calc(100dvh - ${safeInsetTop} - ${safeInsetBottom} - 28px))`,
-            overflow: "auto",
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(4, 8, 20, 0.84)",
-            backdropFilter: "blur(12px)",
-            padding: 12,
-            paddingBottom: `calc(${safeInsetBottom} + 12px)`,
+            display: "grid",
+            placeItems: "center",
+            padding: `calc(${safeInsetTop} + 10px) max(10px, calc(${safeInsetRight} + 8px)) calc(${safeInsetBottom} + 10px) max(10px, calc(${safeInsetLeft} + 8px))`,
+            background: "rgba(2, 6, 16, 0.44)",
+            backdropFilter: "blur(3px)",
           }}
         >
+          <div style={{ width: "min(980px, 100%)", maxHeight: "100%", overflow: "auto", borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(4, 8, 20, 0.9)", backdropFilter: "blur(12px)", padding: 12 }}>
           <div
             style={{
               border: "1px solid rgba(255,255,255,0.12)",
@@ -1093,6 +1125,7 @@ export default function SkyInstrument({
             >
               Audio Monitor
             </div>
+            <button type="button" onClick={() => setDiagnosticsOpen(false)} style={{ borderRadius: 8, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", fontSize: 12, cursor: "pointer", marginBottom: 8 }}>Dismiss</button>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {AUDIO_MONITOR_LAYERS.map((layer) => {
                 const active = audioMonitor[layer.id];
@@ -1228,6 +1261,7 @@ export default function SkyInstrument({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       <div
@@ -1483,7 +1517,7 @@ export default function SkyInstrument({
             position: "absolute",
             left: `max(10px, calc(${safeInsetLeft} + 8px))`,
             right: `max(10px, calc(${safeInsetRight} + 8px))`,
-            bottom: `max(84px, calc(${safeInsetBottom} + 78px))`,
+            bottom: `max(68px, calc(${safeInsetBottom} + 54px))`,
             zIndex: 5,
             display: "flex",
             justifyContent: "center",
@@ -1497,7 +1531,7 @@ export default function SkyInstrument({
               border: "1px solid rgba(255,255,255,0.16)",
               background: "rgba(6, 10, 24, 0.52)",
               backdropFilter: "blur(10px)",
-              padding: "12px 12px 14px",
+              padding: "10px 10px 12px",
               display: "grid",
               gap: 10,
               opacity: 0.97,

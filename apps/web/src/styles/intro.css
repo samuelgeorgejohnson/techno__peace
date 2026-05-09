@@ -294,7 +294,7 @@ body {
   gap: 16px;
 }
 
-.tp-site-logo { width: 58px; opacity: 0.95; }
+.tp-site-logo { width: 52px; opacity: 0.95; }
 .tp-site-nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .tp-site-nav-link, .tp-site-enter-pill {
   text-decoration: none; color: #ebf4ff; border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; padding: 8px 14px;
@@ -303,8 +303,8 @@ body {
 
 .tp-site-enter-pill { white-space: nowrap; }
 
-.tp-site-hero-content { text-align: center; max-width: 860px; margin: 10vh auto 7vh; }
-.tp-site-hero-content h1 { font-size: clamp(2.6rem, 10vw, 7rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.01em; }
+.tp-site-hero-content { text-align: center; max-width: 820px; margin: 8.5vh auto 6.5vh; }
+ .tp-site-hero-content h1 { font-size: clamp(2.4rem, 9vw, 6.4rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.01em; }
 .tp-site-subtitle { margin: 12px 0 6px; font-size: clamp(1.05rem, 2.2vw, 1.7rem); color: #f4f8ff; }
 .tp-site-hero-content p { color: #e6eef9; }
 

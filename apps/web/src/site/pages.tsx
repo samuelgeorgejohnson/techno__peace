@@ -5,19 +5,19 @@ function OverviewCards() {
     <div className="tp-site-overview-grid">
       <article className="tp-site-overview-card">
         <h2>Our Mission</h2>
-        <p>Technology in service of peace and presence.</p>
+        <p>Technology in service of peace, place, and careful attention.</p>
       </article>
       <article className="tp-site-overview-card">
         <h2>Essays & Reflections</h2>
-        <p>Thoughts on listening, culture, and our future.</p>
+        <p>Writing on listening, culture, climate, and shared futures.</p>
       </article>
       <article className="tp-site-overview-card">
         <h2>Field Recordings</h2>
-        <p>Real places. Real sounds. Shared freely.</p>
+        <p>Field-captured atmospheres from real places, shared openly.</p>
       </article>
       <article className="tp-site-overview-card">
         <h2>About TechnoPeace</h2>
-        <p>Our story, our team, our journey.</p>
+        <p>Background, collaborators, and ways to reach the project.</p>
       </article>
     </div>
   );
@@ -27,8 +27,8 @@ export function SiteHomePage() {
   return (
     <SiteLayout
       title="TechnoPeace"
-      subtitle="A world of listening. A story of our time."
-      description="An environmental sound instrument and resonance practice for tuning attention."
+      subtitle="Listening as practice, atmosphere as instrument."
+      description="A responsive environmental instrument for tuning attention to weather, place, and human signal."
     >
       <OverviewCards />
     </SiteLayout>
