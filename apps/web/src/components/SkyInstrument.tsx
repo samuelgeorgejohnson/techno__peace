@@ -198,6 +198,7 @@ export default function SkyInstrument({
   const [chaosTempoBpm, setChaosTempoBpm] = useState(100);
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const [chaosVizStep, setChaosVizStep] = useState(0);
+  const [atmosClock, setAtmosClock] = useState(() => Date.now());
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -309,6 +310,9 @@ export default function SkyInstrument({
   const starVisibility = clamp01((0.15 + nightness * 1.1) * clearSkyFactor * (0.35 + moonSkyLift * 0.9));
   const cloudAlpha = 0.06 + sky.dayness * 0.18;
   const cloudAlphaDense = 0.18 + sky.dayness * 0.38;
+  const atmosphericPhase = (atmosClock / 1000 / 60 / 12) % (Math.PI * 2);
+  const humidityHaze = clamp01((weather.humidityPct / 100) * 0.8 + weather.cloudCover * 0.3);
+  const precipitationGlow = clamp01((weather.precipitationMm + weather.rainMm + weather.showersMm) / 4.5);
   const weatherSourceStatus: DiagnosticSourceStatus =
     weather.status === "live"
       ? "live"
@@ -454,6 +458,11 @@ export default function SkyInstrument({
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
   const isMobileViewport = typeof window !== "undefined" ? window.innerWidth <= 900 : false;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setAtmosClock(Date.now()), 45000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (performanceMode !== "chaos" || !hasUnlockedAudio) return;
@@ -829,6 +838,33 @@ export default function SkyInstrument({
         aria-hidden="true"
         style={{
           position: "absolute",
+          inset: "-12%",
+          pointerEvents: "none",
+          zIndex: 0,
+          background: `radial-gradient(900px 520px at ${52 + Math.sin(atmosphericPhase) * 14}% ${46 + Math.cos(atmosphericPhase * 0.8) * 10}%, rgba(220,238,255,${0.04 + humidityHaze * 0.16}), rgba(220,238,255,0) 70%)`,
+          opacity: 0.35 + humidityHaze * 0.6,
+          transition: "background 1800ms ease, opacity 1200ms ease",
+          mixBlendMode: "screen",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+          background: `linear-gradient(180deg, rgba(174,208,255,${0.03 + precipitationGlow * 0.14}) 0%, rgba(174,208,255,0) 35%, rgba(120,165,220,${0.02 + precipitationGlow * 0.1}) 100%)`,
+          opacity: precipitationGlow * 0.75,
+          transition: "opacity 1200ms ease",
+          mixBlendMode: "screen",
+        }}
+      />
+
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
           inset: "-8%",
           pointerEvents: "none",
           zIndex: 0,
@@ -860,13 +896,45 @@ export default function SkyInstrument({
 
       <div
         onPointerDown={stopMixerEvent}
+        style={{
+          position: "absolute",
+          top: "max(14px, env(safe-area-inset-top, 0px) + 10px)",
+          left: "max(14px, env(safe-area-inset-left, 0px) + 10px)",
+          zIndex: 9,
+        }}
+      >
+        <a
+          href="/"
+          aria-label="Return to the world"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            textDecoration: "none",
+            borderRadius: 999,
+            border: "1px solid rgba(233,245,255,0.2)",
+            background: "rgba(3, 10, 22, 0.38)",
+            color: "rgba(236,246,255,0.9)",
+            padding: "7px 12px",
+            backdropFilter: "blur(8px)",
+            fontSize: 12,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          <span aria-hidden="true">←</span> Return
+        </a>
+      </div>
+
+      <div
+        onPointerDown={stopMixerEvent}
         onPointerMove={stopMixerEvent}
         onPointerUp={stopMixerEvent}
         onPointerCancel={stopMixerEvent}
         onClick={stopMixerEvent}
         style={{
           position: "absolute",
-          top: 16,
+          top: isCompactHud ? 62 : 66,
           left: 16,
           zIndex: mixerOpen ? 4 : 6,
           padding: isCompactHud ? 8 : 12,
@@ -1050,30 +1118,33 @@ export default function SkyInstrument({
           onClick={stopMixerEvent}
           style={{
             position: "absolute",
-            top: isCompactHud ? 164 : 252,
-            left: 16,
-            zIndex: 7,
-            width: "min(980px, calc(100vw - 32px))",
-            maxHeight: "min(62vh, 560px)",
-            overflow: "auto",
-            borderRadius: 16,
-            border: "1px solid rgba(255,255,255,0.12)",
-            background: "rgba(4, 8, 20, 0.84)",
-            backdropFilter: "blur(12px)",
+            inset: 0,
+            zIndex: 8,
+            background: "rgba(1, 6, 16, 0.42)",
+            backdropFilter: "blur(4px)",
+            display: "grid",
+            placeItems: "center",
             padding: 12,
           }}
         >
           <div
             style={{
+              width: "min(960px, calc(100vw - 24px))",
+              maxHeight: "min(72vh, 620px)",
+              overflow: "auto",
               border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 12,
-              padding: 10,
+              borderRadius: 18,
+              padding: 14,
               marginBottom: 10,
-              background: "rgba(255,255,255,0.03)",
+              background: "rgba(4, 8, 20, 0.88)",
               display: "grid",
               gap: 8,
             }}
           >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", opacity: 0.8 }}>Observatory diagnostics</div>
+              <button type="button" onClick={() => setDiagnosticsOpen(false)} style={{ borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.08)", color: "white", padding: "6px 10px", cursor: "pointer" }}>Close</button>
+            </div>
             <div
               style={{
                 fontSize: 11,
@@ -1473,18 +1544,16 @@ export default function SkyInstrument({
         <div
           style={{
             position: "absolute",
-            left: "max(12px, env(safe-area-inset-left, 0px) + 10px)",
             right: "max(12px, env(safe-area-inset-right, 0px) + 10px)",
-            bottom: "max(96px, calc(env(safe-area-inset-bottom, 0px) + 92px))",
+            top: "max(120px, env(safe-area-inset-top, 0px) + 110px)",
             zIndex: 5,
-            display: "flex",
-            justifyContent: "center",
+            display: "grid",
             pointerEvents: "none",
           }}
         >
           <div
             style={{
-              width: "min(620px, 100%)",
+              width: "min(320px, 72vw)",
               borderRadius: 16,
               border: "1px solid rgba(255,255,255,0.16)",
               background: "rgba(6, 10, 24, 0.52)",

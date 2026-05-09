@@ -273,7 +273,7 @@ body {
   gap: 16px;
 }
 
-.tp-site-logo { width: 58px; opacity: 0.95; }
+.tp-site-logo { width: clamp(84px, 12vw, 128px); opacity: 0.98; filter: drop-shadow(0 8px 24px rgba(164, 214, 255, 0.35)); }
 .tp-site-nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
 .tp-site-nav-link, .tp-site-enter-pill {
   text-decoration: none; color: #ebf4ff; border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; padding: 8px 14px;
@@ -282,8 +282,8 @@ body {
 
 .tp-site-enter-pill { white-space: nowrap; }
 
-.tp-site-hero-content { text-align: center; max-width: 860px; margin: 10vh auto 7vh; }
-.tp-site-hero-content h1 { font-size: clamp(2.6rem, 10vw, 7rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.01em; }
+.tp-site-hero-content { text-align: center; max-width: 900px; margin: 13vh auto 8vh; }
+.tp-site-hero-content h1 { font-size: clamp(2.8rem, 10vw, 7.4rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.015em; }
 .tp-site-subtitle { margin: 12px 0 6px; font-size: clamp(1.05rem, 2.2vw, 1.7rem); color: #f4f8ff; }
 .tp-site-hero-content p { color: #e6eef9; }
 
@@ -303,7 +303,7 @@ body {
   padding: 16px;
 }
 .tp-site-overview-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
-.tp-site-overview-card p { margin: 0; color: #d3e0ee; }
+.tp-site-overview-card p { margin: 0; color: #d3e0ee; line-height: 1.5; }
 
 @media (max-width: 900px) {
   .tp-site-nav-shell { grid-template-columns: 1fr; justify-items: center; }

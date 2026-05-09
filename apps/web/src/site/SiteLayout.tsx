@@ -41,8 +41,8 @@ export default function SiteLayout({ title, subtitle, description, children }: S
           {subtitle ? <p className="tp-site-subtitle">{subtitle}</p> : null}
           <p>{description}</p>
           <div className="tp-site-actions">
-            <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-            <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
+            <a className="tp-site-primary" href="/app/sky">Descend into Sky Mode</a>
+            <a className="tp-site-secondary" href="/field-recordings">Listen to Field Notes</a>
           </div>
         </div>
       </section>
