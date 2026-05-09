@@ -558,7 +558,11 @@ export function useAudioEngine() {
     const baseCutoff = clamp(brightnessCutoff * humiditySoftening, 180, 6200);
     const baseQ = clamp(0.55 + 0.6 * (1 - humidityNorm), 0.5, 1.3);
 
-    const weatherMix = clamp((windNorm + humidityNorm + rainNorm) / 3, 0, 1.8);
+    const clearSky = clamp(1 - p.cloudCover);
+    const lowCloud = clamp((p.cloudCover - 0.2) / 0.8);
+    const midCloud = clamp((p.cloudCover - 0.45) / 0.55);
+    const highCloud = clamp((p.cloudCover - 0.7) / 0.3);
+    const weatherMix = clamp((windNorm + humidityNorm + rainNorm + p.cloudCover * 0.7) / 3.7, 0, 1.8);
     const windLayerLevel = clamp((0.008 + 0.07 * windNorm) * (0.65 + 0.35 * (1 - humidityNorm)), 0, 0.12);
     const rainLayerLevel = clamp((0.001 + 0.05 * rainNorm) * (1 - 0.1 * humidityNorm), 0, 0.05);
     const weatherFilterHz = clamp(260 + 460 * windNorm + 240 * (1 - y), 180, 1200);
@@ -580,14 +584,20 @@ export function useAudioEngine() {
 
     const now = ctx.currentTime;
     const dayness = p.isDay ? 1 : 0;
+    const nightness = 1 - dayness;
+    const moonExposure = clamp((p.moonLevel ?? moonNorm) * (0.2 + 0.8 * nightness) * clearSky, 0, 2);
+    const starExposure = clamp(nightness * clearSky * (1 - lowCloud * 0.55) * (0.2 + 0.8 * moonExposure), 0, 1);
+    const atmosphericDiffusion = clamp(0.18 + humidityNorm * 0.55 + rainNorm * 0.25 + lowCloud * 0.18, 0.15, 1);
+    const atmosphericTurbulence = clamp(0.12 + windNorm * 0.8 + midCloud * 0.15, 0.08, 1);
+    const harmonicExposure = clamp(0.42 + clearSky * 0.45 + dayness * 0.12 - highCloud * 0.24, 0.2, 1.2);
+    const fieldDensity = clamp(0.3 + humidityNorm * 0.35 + lowCloud * 0.18 + rainNorm * 0.35 + dayness * 0.1, 0.2, 1.3);
     const morningLift = clamp(1 - Math.abs(sunNorm - 0.3) / 0.25, 0, 1);
     const birdWeatherSuppression = clamp((1 - 0.75 * rainNorm) * (1 - 0.55 * windNorm), 0, 1);
     const birdActivity = clamp((0.2 + 0.8 * dayness) * (0.45 + 0.55 * morningLift) * birdWeatherSuppression * birdsLevel, 0, 2);
     daylifeActivityRef.current += (birdActivity - daylifeActivityRef.current) * 0.12;
     const birdDensity = clamp(0.05 + 1.4 * daylifeActivityRef.current, 0, 2.2);
 
-    const nightness = 1 - dayness;
-    const chimeActivityTarget = clamp((0.1 + 0.9 * nightness) * (0.3 + 0.7 * moonNorm) * (1 - 0.55 * precipNorm) * chimesLevel, 0, 2);
+    const chimeActivityTarget = clamp((0.08 + windNorm * 1.25) * (1 - 0.55 * precipNorm) * (0.7 + 0.3 * clearSky) * chimesLevel, 0, 2);
     chimeActivityRef.current += (chimeActivityTarget - chimeActivityRef.current) * 0.1;
     const chimeDensity = clamp(0.08 + 0.34 * chimeActivityRef.current, 0.08, 0.55);
 
@@ -803,10 +813,14 @@ export function useAudioEngine() {
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
 
-    const windMainCutoffMod = clamp(1 - windInfluence * 0.22, 0.72, 1);
-    const sunMainBrightness = clamp(1 + sunInfluence * 0.2, 1, 1.35);
-    baseFilterRef.current?.frequency.setTargetAtTime(isChaosMode ? chaosBrightness : baseCutoff * windMainCutoffMod * sunMainBrightness, now, 0.08);
-    baseFilterRef.current?.Q.setTargetAtTime(baseQ, now, 0.08);
+    const windMainCutoffMod = clamp(1 - windInfluence * 0.16 + harmonicExposure * 0.1, 0.72, 1.2);
+    const sunMainBrightness = clamp(0.95 + sunInfluence * 0.15 + harmonicExposure * 0.08, 0.9, 1.35);
+    baseFilterRef.current?.frequency.setTargetAtTime(
+      isChaosMode ? chaosBrightness : baseCutoff * windMainCutoffMod * sunMainBrightness,
+      now,
+      0.14,
+    );
+    baseFilterRef.current?.Q.setTargetAtTime(clamp(baseQ + atmosphericTurbulence * 0.2 - atmosphericDiffusion * 0.12, 0.45, 1.4), now, 0.16);
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
     weatherFilterRef.current?.Q.setTargetAtTime(clamp(0.5 + 0.6 * windNorm, 0.5, 1.4), now, 0.1);
@@ -826,26 +840,42 @@ export function useAudioEngine() {
     airPanDriftRef.current += (panTarget - airPanDriftRef.current) * 0.04;
     airPannerRef.current?.pan.setTargetAtTime(airPanDriftRef.current, now, 0.2);
 
-    daylifeFilterRef.current?.frequency.setTargetAtTime(clamp(2500 + daylifeActivityRef.current * 2600, 2500, 6000), now, 0.18);
+    daylifeFilterRef.current?.frequency.setTargetAtTime(clamp(2200 + daylifeActivityRef.current * 2200 + harmonicExposure * 900, 2200, 6000), now, 0.2);
     daylifeFilterRef.current?.Q.setTargetAtTime(2.2, now, 0.18);
     daylifeGainRef.current?.gain.setTargetAtTime(clamp(0.14 + 0.35 * daylifeActivityRef.current, 0.1, 0.55), now, 0.2);
 
-    chimeFilterRef.current?.frequency.setTargetAtTime(clamp(700 + moonNorm * 1100, 700, 1800), now, 0.18);
-    chimeFilterRef.current?.Q.setTargetAtTime(5.2, now, 0.2);
+    chimeFilterRef.current?.frequency.setTargetAtTime(clamp(680 + windNorm * 900 + starExposure * 260, 650, 1850), now, 0.22);
+    chimeFilterRef.current?.Q.setTargetAtTime(clamp(4.8 + atmosphericTurbulence * 1.1, 4.8, 6.8), now, 0.24);
     chimeGainRef.current?.gain.setTargetAtTime(clamp(0.16 + 0.44 * chimeActivityRef.current, 0.14, 0.75), now, 0.22);
 
     trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * proximity, 60, 170), now, 0.2);
     trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
-    mainSignalPostFilterRef.current?.frequency.setTargetAtTime(clamp(1000 + 2200 * (1 - windInfluence) + 1200 * sunInfluence, 850, 4600), now, 0.14);
-    mainSignalPostFilterRef.current?.Q.setTargetAtTime(clamp(0.7 + 0.35 * windInfluence + 0.15 * moonInfluence, 0.7, 1.5), now, 0.14);
-    mainSignalShimmerDelayRef.current?.delayTime.setTargetAtTime(clamp(0.14 + moonInfluence * 0.07 + airInfluence * 0.02, 0.14, 0.32), now, 0.18);
-    mainSignalShimmerGainRef.current?.gain.setTargetAtTime(clamp(0.01 + moonInfluence * 0.07, 0.01, 0.12), now, 0.2);
-    mainSignalReverbGainRef.current?.gain.setTargetAtTime(clamp(0.008 + rainInfluence * 0.09, 0.008, 0.16), now, 0.2);
+    mainSignalPostFilterRef.current?.frequency.setTargetAtTime(
+      clamp(900 + 1700 * harmonicExposure + 700 * sunInfluence - 650 * atmosphericDiffusion, 800, 4700),
+      now,
+      0.2,
+    );
+    mainSignalPostFilterRef.current?.Q.setTargetAtTime(
+      clamp(0.68 + 0.22 * atmosphericTurbulence + 0.2 * moonExposure - 0.15 * atmosphericDiffusion, 0.6, 1.55),
+      now,
+      0.2,
+    );
+    mainSignalShimmerDelayRef.current?.delayTime.setTargetAtTime(clamp(0.14 + moonExposure * 0.055 + airInfluence * 0.02, 0.14, 0.3), now, 0.24);
+    mainSignalShimmerGainRef.current?.gain.setTargetAtTime(clamp(0.008 + starExposure * 0.035 + moonExposure * 0.03, 0.008, 0.095), now, 0.26);
+    mainSignalReverbGainRef.current?.gain.setTargetAtTime(clamp(0.012 + rainInfluence * 0.06 + humidityNorm * 0.055 + fieldDensity * 0.015, 0.01, 0.19), now, 0.26);
     mainSignalRainNoiseGainRef.current?.gain.setTargetAtTime(clamp(0.0001 + rainInfluence * 0.006, 0.0001, 0.01), now, 0.12);
     mainSignalCompressorRef.current?.threshold.setTargetAtTime(clamp(-26 + trafficInfluence * 8, -26, -15), now, 0.15);
     mainSignalCompressorRef.current?.ratio.setTargetAtTime(clamp(1.8 + trafficInfluence * 1.6, 1.8, 3.4), now, 0.15);
-    mainSignalGateRef.current?.gain.setTargetAtTime(clamp(0.96 + Math.sin(now * (0.45 + trafficInfluence * 1.1)) * (0.005 + trafficInfluence * 0.02), 0.9, 1.05), now, 0.12);
-    mainSignalStereoRef.current?.pan.setTargetAtTime(clamp(Math.sin(now * (0.06 + airInfluence * 0.1)) * (0.05 + airInfluence * 0.2), -0.45, 0.45), now, 0.22);
+    mainSignalGateRef.current?.gain.setTargetAtTime(
+      clamp(0.965 + Math.sin(now * (0.24 + atmosphericTurbulence * 0.9)) * (0.004 + fieldDensity * 0.012 + trafficInfluence * 0.01), 0.9, 1.05),
+      now,
+      0.18,
+    );
+    mainSignalStereoRef.current?.pan.setTargetAtTime(
+      clamp(Math.sin(now * (0.035 + atmosphericTurbulence * 0.08 + airInfluence * 0.05)) * (0.04 + clearSky * 0.07 + windNorm * 0.1), -0.45, 0.45),
+      now,
+      0.3,
+    );
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
     baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.22);
@@ -862,8 +892,8 @@ export function useAudioEngine() {
     chaosBassFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + pressure * 1.5, 0.8, 2.4), now, 0.06);
     chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(2200 + (1 - y) * 5000 + windNorm * 600, 1800, 8200), now, 0.08);
 
-    lfoRef.current?.frequency.setTargetAtTime(clamp(0.06 + 0.35 * sunNorm, 0.05, 0.6), now, 0.12);
-    lfoGainRef.current?.gain.setTargetAtTime(clamp(0.003 + 0.01 * moonNorm + windInfluence * 0.003, 0.002, 0.02), now, 0.14);
+    lfoRef.current?.frequency.setTargetAtTime(clamp(0.04 + 0.18 * atmosphericTurbulence + 0.08 * sunNorm, 0.04, 0.42), now, 0.2);
+    lfoGainRef.current?.gain.setTargetAtTime(clamp(0.0025 + 0.006 * atmosphericTurbulence + 0.004 * moonExposure + starExposure * 0.002, 0.002, 0.02), now, 0.24);
     airMotionLfoRef.current?.frequency.setTargetAtTime(airMotionLfoRate, now, 0.2);
     airMotionGainRef.current?.gain.setTargetAtTime(airMotionLfoDepth, now, 0.2);
   }
