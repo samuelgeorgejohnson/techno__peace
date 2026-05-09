@@ -178,6 +178,27 @@ body {
   filter: drop-shadow(0 0 14px rgba(77, 225, 255, 0.35));
 }
 
+
+.tp-wordmark h1 {
+  margin: 2px 0 0;
+  font-size: clamp(28px, 8vw, 42px);
+  line-height: 1.02;
+  color: #f8fbff;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
+}
+
+.tp-wordmark .tp-eyebrow {
+  color: rgba(231, 240, 255, 0.9);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5);
+}
+
+.tp-wordmark > div {
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(5, 10, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(4px);
+}
 /* Onboarding */
 .tp-onboarding {
   position: fixed;
