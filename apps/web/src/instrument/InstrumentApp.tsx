@@ -19,7 +19,7 @@ export default function InstrumentApp() {
   }, [isRequestingLocation, location, locationError, source]);
 
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+    <div style={{ position: "relative", width: "100vw", height: "100dvh", minHeight: "100svh" }}>
       <SkyInstrument
         locationText={locationText}
         isRequestingLocation={isRequestingLocation}

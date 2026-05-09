@@ -454,6 +454,10 @@ export default function SkyInstrument({
     !hasCompletedSplash &&
     (weather.status === "live" || weather.status === "fallback" || weather.status === "error");
   const isMobileViewport = typeof window !== "undefined" ? window.innerWidth <= 900 : false;
+  const safeInsetTop = "env(safe-area-inset-top, 0px)";
+  const safeInsetRight = "env(safe-area-inset-right, 0px)";
+  const safeInsetBottom = "env(safe-area-inset-bottom, 0px)";
+  const safeInsetLeft = "env(safe-area-inset-left, 0px)";
 
   useEffect(() => {
     if (performanceMode !== "chaos" || !hasUnlockedAudio) return;
@@ -750,7 +754,8 @@ export default function SkyInstrument({
       style={{
         position: "relative",
         width: "100vw",
-        height: "100vh",
+        height: "100dvh",
+        minHeight: "100svh",
         overflow: "hidden",
         touchAction: mixerOpen ? "auto" : "none",
         userSelect: "none",
@@ -866,8 +871,8 @@ export default function SkyInstrument({
         onClick={stopMixerEvent}
         style={{
           position: "absolute",
-          top: 16,
-          left: 16,
+          top: `max(10px, calc(${safeInsetTop} + 8px))`,
+          left: `max(10px, calc(${safeInsetLeft} + 8px))`,
           zIndex: mixerOpen ? 4 : 6,
           padding: isCompactHud ? 8 : 12,
           borderRadius: 14,
@@ -1050,17 +1055,20 @@ export default function SkyInstrument({
           onClick={stopMixerEvent}
           style={{
             position: "absolute",
-            top: isCompactHud ? 164 : 252,
-            left: 16,
+            top: isCompactHud
+              ? `max(150px, calc(${safeInsetTop} + 142px))`
+              : `max(236px, calc(${safeInsetTop} + 226px))`,
+            left: `max(10px, calc(${safeInsetLeft} + 8px))`,
             zIndex: 7,
-            width: "min(980px, calc(100vw - 32px))",
-            maxHeight: "min(62vh, 560px)",
+            width: `min(980px, calc(100vw - 24px - ${safeInsetLeft} - ${safeInsetRight}))`,
+            maxHeight: `min(62dvh, calc(100dvh - ${safeInsetTop} - ${safeInsetBottom} - 28px))`,
             overflow: "auto",
             borderRadius: 16,
             border: "1px solid rgba(255,255,255,0.12)",
             background: "rgba(4, 8, 20, 0.84)",
             backdropFilter: "blur(12px)",
             padding: 12,
+            paddingBottom: `calc(${safeInsetBottom} + 12px)`,
           }}
         >
           <div
@@ -1252,13 +1260,13 @@ export default function SkyInstrument({
             position: "absolute",
             inset: 0,
             zIndex: 5,
-            padding: 24,
+            padding: `max(12px, calc(${safeInsetTop} + 6px)) max(12px, calc(${safeInsetRight} + 10px)) max(14px, calc(${safeInsetBottom} + 12px)) max(12px, calc(${safeInsetLeft} + 10px))`,
             background: "rgba(4, 6, 14, 0.48)",
             backdropFilter: "blur(14px)",
             overflowY: "auto",
             WebkitOverflowScrolling: "touch",
             overscrollBehavior: "contain",
-            maxHeight: "100vh",
+            maxHeight: "100dvh",
           }}
         >
           <div
@@ -1274,7 +1282,7 @@ export default function SkyInstrument({
               padding: 28,
               display: "grid",
               gap: 24,
-              maxHeight: "calc(100vh - 48px)",
+              maxHeight: `calc(100dvh - ${safeInsetTop} - ${safeInsetBottom} - 20px)`,
               overflowY: "auto",
               WebkitOverflowScrolling: "touch",
               overscrollBehavior: "contain",
@@ -1473,9 +1481,9 @@ export default function SkyInstrument({
         <div
           style={{
             position: "absolute",
-            left: "max(12px, env(safe-area-inset-left, 0px) + 10px)",
-            right: "max(12px, env(safe-area-inset-right, 0px) + 10px)",
-            bottom: "max(96px, calc(env(safe-area-inset-bottom, 0px) + 92px))",
+            left: `max(10px, calc(${safeInsetLeft} + 8px))`,
+            right: `max(10px, calc(${safeInsetRight} + 8px))`,
+            bottom: `max(84px, calc(${safeInsetBottom} + 78px))`,
             zIndex: 5,
             display: "flex",
             justifyContent: "center",
