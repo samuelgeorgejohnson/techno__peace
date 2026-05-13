@@ -4,6 +4,15 @@ import type { ManMadeSignals } from "./ManMadeSignals";
 
 export type SignalStatus = "idle" | "loading" | "live" | "fallback" | "error";
 
+export type ChaosLaneId = "kick" | "bass" | "hat";
+
+export interface ChaosStepState {
+  on: boolean;
+  accent?: boolean;
+}
+
+export type ChaosPattern = Record<ChaosLaneId, ChaosStepState[]>;
+
 /**
  * Shared weather + place payload currently used by the web signal chain.
  */
@@ -43,6 +52,7 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   performanceMode?: "sky" | "chaos";
   chaosTempoBpm?: number;
   trafficReliable?: boolean;
+  chaosPattern?: ChaosPattern;
 };
 
 /**

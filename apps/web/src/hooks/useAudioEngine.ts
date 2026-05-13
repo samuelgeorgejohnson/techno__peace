@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
+import type { AudioEngineSignalPayload, ChaosLaneId } from "@technopeace/codex-data/types/SignalPayload";
 
 function clamp(x: number, lo = 0, hi = 1) {
   return Math.max(lo, Math.min(hi, x));
@@ -103,6 +103,7 @@ export function useAudioEngine() {
   const nextTrafficEventRef = useRef(0);
   const nextChaosPulseRef = useRef(0);
   const chaosStepRef = useRef(0);
+  const chaosStepsRef = useRef(16);
 
   const startedRef = useRef(false);
   const stopTimeoutRef = useRef<number | null>(null);
@@ -184,6 +185,7 @@ export function useAudioEngine() {
     nextTrafficEventRef.current = 0;
     nextChaosPulseRef.current = 0;
     chaosStepRef.current = 0;
+    chaosStepsRef.current = 16;
     startedRef.current = false;
   }
 
@@ -740,52 +742,74 @@ export function useAudioEngine() {
     }
 
     if (isChaosMode && chaosKickGainRef.current && chaosHatGainRef.current) {
+      const pattern = p.chaosPattern;
+      const laneSteps = pattern?.kick?.length ?? 16;
+      chaosStepsRef.current = laneSteps;
       if (nextChaosPulseRef.current === 0) nextChaosPulseRef.current = now;
       let safety = 0;
       while (now >= nextChaosPulseRef.current && safety < 4) {
-        const step = chaosStepRef.current % 16;
+        const step = chaosStepRef.current % laneSteps;
         const stepTime = nextChaosPulseRef.current;
-        const isKickStep = step % 4 === 0 || (pressure > 0.72 && step % 8 === 6);
-        const isHatStep = step % 2 === 0 || (step % 4 === 3 && windNorm > 0.2);
-        const isBassStep = step % 8 === 0 || step % 8 === 5;
+        const laneOn = (lane: ChaosLaneId, fallback: boolean) => pattern?.[lane]?.[step]?.on ?? fallback;
+        const laneAccent = (lane: ChaosLaneId) => pattern?.[lane]?.[step]?.accent ?? false;
+        const isKickStep = laneOn("kick", step % 4 === 0 || (pressure > 0.72 && step % 8 === 6));
+        const isHatStep = laneOn("hat", step % 2 === 0 || (step % 4 === 3 && windNorm > 0.2));
+        const isBassStep = laneOn("bass", step % 8 === 0 || step % 8 === 5);
 
-        if (isKickStep || isBassStep) {
+        if (isKickStep) {
           const kick = ctx.createOscillator();
           const kickGain = ctx.createGain();
+          const accent = laneAccent("kick") ? 1.3 : 1;
           kick.type = pressure > 0.6 ? "triangle" : "sine";
-          const bassRatio = isBassStep ? 1.1 : 1.6;
-          kick.frequency.setValueAtTime(chaosBassHz * bassRatio, stepTime);
-          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * (isBassStep ? 0.92 : 0.75)), stepTime + 0.1);
+          kick.frequency.setValueAtTime(chaosBassHz * 1.7, stepTime);
+          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * 0.76), stepTime + 0.11);
           kickGain.gain.setValueAtTime(0.0001, stepTime);
-          kickGain.gain.exponentialRampToValueAtTime((isBassStep ? 0.045 : 0.09) + 0.08 * chaosDrive, stepTime + 0.01);
-          kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + (0.14 + 0.06 * (1 - pressure)));
+          kickGain.gain.exponentialRampToValueAtTime((0.08 + 0.08 * chaosDrive) * accent, stepTime + 0.01);
+          kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.16);
           kick.connect(kickGain);
           kickGain.connect(chaosKickGainRef.current);
           kick.start(stepTime);
-          kick.stop(stepTime + 0.25);
+          kick.stop(stepTime + 0.24);
+        }
+
+        if (isBassStep) {
+          const bass = ctx.createOscillator();
+          const bassGain = ctx.createGain();
+          const accent = laneAccent("bass") ? 1.35 : 1;
+          bass.type = "sawtooth";
+          const bassStepRatio = Math.pow(2, (x - 0.5) * 0.55);
+          bass.frequency.setValueAtTime(clamp(chaosBassHz * bassStepRatio, 32, 190), stepTime);
+          bassGain.gain.setValueAtTime(0.0001, stepTime);
+          bassGain.gain.exponentialRampToValueAtTime((0.05 + 0.04 * chaosDrive) * accent, stepTime + 0.02);
+          bassGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + (0.28 + 0.15 * (1 - y)));
+          bass.connect(bassGain);
+          bassGain.connect(chaosKickGainRef.current);
+          bass.start(stepTime);
+          bass.stop(stepTime + 0.52);
         }
 
         if (isHatStep) {
           const hat = ctx.createOscillator();
           const hatGain = ctx.createGain();
-          hat.type = "square";
-          hat.frequency.setValueAtTime(3400 + windNorm * 800 + humidityNorm * 200, stepTime);
+          const accent = laneAccent("hat") ? 1.25 : 1;
+          hat.type = "triangle";
+          hat.frequency.setValueAtTime(1800 + windNorm * 380 + humidityNorm * 120, stepTime);
           hatGain.gain.setValueAtTime(0.0001, stepTime);
-          hatGain.gain.exponentialRampToValueAtTime(0.018 + 0.03 * pressure + 0.014 * windNorm, stepTime + 0.004);
-          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.035);
+          hatGain.gain.exponentialRampToValueAtTime((0.009 + 0.016 * pressure + 0.01 * windNorm) * accent, stepTime + 0.005);
+          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.045);
           hat.connect(hatGain);
           hatGain.connect(chaosHatGainRef.current);
           hat.start(stepTime);
-          hat.stop(stepTime + 0.05);
+          hat.stop(stepTime + 0.06);
         }
 
         if (chaosDuckGainRef.current && isKickStep) {
           chaosDuckGainRef.current.gain.cancelScheduledValues(stepTime);
-          chaosDuckGainRef.current.gain.setValueAtTime(0.88, stepTime);
-          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.12);
+          chaosDuckGainRef.current.gain.setValueAtTime(0.86, stepTime);
+          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.13);
         }
 
-        chaosStepRef.current = (chaosStepRef.current + 1) % 16;
+        chaosStepRef.current = (chaosStepRef.current + 1) % laneSteps;
         const swingOffset = chaosStepRef.current % 2 === 1 ? chaosSwing : 0;
         nextChaosPulseRef.current += chaosStepSeconds + swingOffset;
         safety += 1;
@@ -890,7 +914,7 @@ export function useAudioEngine() {
     chaosHatGainRef.current?.gain.setTargetAtTime(chaosHatMix, now, 0.04);
     chaosBassFilterRef.current?.frequency.setTargetAtTime(clamp(120 + (1 - y) * 420 + pressure * 220, 90, 700), now, 0.06);
     chaosBassFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + pressure * 1.5, 0.8, 2.4), now, 0.06);
-    chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(2200 + (1 - y) * 5000 + windNorm * 600, 1800, 8200), now, 0.08);
+    chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(1300 + (1 - y) * 2600 + windNorm * 380, 1100, 4800), now, 0.08);
 
     lfoRef.current?.frequency.setTargetAtTime(clamp(0.04 + 0.18 * atmosphericTurbulence + 0.08 * sunNorm, 0.04, 0.42), now, 0.2);
     lfoGainRef.current?.gain.setTargetAtTime(clamp(0.0025 + 0.006 * atmosphericTurbulence + 0.004 * moonExposure + starExposure * 0.002, 0.002, 0.02), now, 0.24);

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CelestialMixerState, CelestialSignals } from "@technopeace/codex-data/types/CelestialSignals";
 import type { AirSignal, ManMadeMixerState } from "@technopeace/codex-data/types/ManMadeSignals";
-import type { AudioEngineSignalPayload } from "@technopeace/codex-data/types/SignalPayload";
+import type { AudioEngineSignalPayload, ChaosLaneId, ChaosPattern } from "@technopeace/codex-data/types/SignalPayload";
 import { derivePlaceBaseFrequency, useAudioEngine } from "../hooks/useAudioEngine";
 import type { AudioMonitorState } from "../hooks/useAudioEngine";
 import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
@@ -65,6 +65,21 @@ function buildProceduralAirSignal(lat: number, lon: number, isDay: boolean): Air
 }
 
 type Pt = { x: number; y: number; pressure: number };
+
+const CHAOS_STEPS = 16;
+const CHAOS_LANES: Array<{ id: ChaosLaneId; label: string }> = [
+  { id: "kick", label: "Kick" },
+  { id: "bass", label: "Bass" },
+  { id: "hat", label: "Hat" },
+];
+
+function makeDefaultChaosPattern(): ChaosPattern {
+  return {
+    kick: Array.from({ length: CHAOS_STEPS }, (_, i) => ({ on: i % 4 === 0, accent: i % 8 === 0 })),
+    bass: Array.from({ length: CHAOS_STEPS }, (_, i) => ({ on: i % 8 === 0 || i % 8 === 5, accent: i % 8 === 0 })),
+    hat: Array.from({ length: CHAOS_STEPS }, (_, i) => ({ on: i % 2 === 0, accent: i % 4 === 2 })),
+  };
+}
 type Channel = { id: string; name: string; detail: string };
 type MixerPage = { id: string; title: string; blurb: string; channels: Channel[] };
 type DiagnosticSourceStatus = "live" | "fallback" | "unavailable" | "user-controlled";
@@ -198,6 +213,7 @@ export default function SkyInstrument({
   const [chaosTempoBpm, setChaosTempoBpm] = useState(100);
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const [chaosVizStep, setChaosVizStep] = useState(0);
+  const [chaosPattern, setChaosPattern] = useState<ChaosPattern>(() => makeDefaultChaosPattern());
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -463,7 +479,7 @@ export default function SkyInstrument({
     if (performanceMode !== "chaos" || !hasUnlockedAudio) return;
     const stepMs = (60 / chaosTempoBpm / 4) * 1000;
     const timer = window.setInterval(() => {
-      setChaosVizStep((prev) => (prev + 1) % 16);
+      setChaosVizStep((prev) => (prev + 1) % CHAOS_STEPS);
     }, stepMs);
     return () => window.clearInterval(timer);
   }, [chaosTempoBpm, performanceMode, hasUnlockedAudio]);
@@ -504,8 +520,9 @@ export default function SkyInstrument({
       performanceMode,
       chaosTempoBpm,
       trafficReliable,
+      chaosPattern,
     };
-  }, [birdsMix, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [birdsMix, chaosPattern, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -633,6 +650,21 @@ export default function SkyInstrument({
     setIsDragging(false);
     setPt((p) => ({ ...p, pressure: dronePressure }));
     update(audioParams({ ...pt, pressure: dronePressure }));
+  }
+
+
+  function toggleChaosStep(lane: ChaosLaneId, step: number) {
+    setChaosPattern((prev) => ({
+      ...prev,
+      [lane]: prev[lane].map((cell, i) => (i === step ? { ...cell, on: !cell.on } : cell)),
+    }));
+  }
+
+  function toggleChaosAccent(lane: ChaosLaneId, step: number) {
+    setChaosPattern((prev) => ({
+      ...prev,
+      [lane]: prev[lane].map((cell, i) => (i === step ? { ...cell, accent: !cell.accent } : cell)),
+    }));
   }
 
   function stopMixerEvent(e: React.SyntheticEvent) {
@@ -1565,44 +1597,32 @@ export default function SkyInstrument({
               </div>
               <strong style={{ fontSize: 14 }}>{chaosTempoBpm} BPM</strong>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(16, minmax(0, 1fr))",
-                gap: 5,
-                padding: 6,
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.05)",
-              }}
-            >
-              {Array.from({ length: 16 }, (_, i) => {
-                const isActive = i === chaosVizStep;
-                const isBeat = i % 4 === 0;
-                return (
-                  <button
-                    key={`chaos-step-${i}`}
-                    type="button"
-                    onPointerDown={stopMixerEvent}
-                    onPointerUp={stopMixerEvent}
-                    style={{
-                      height: isBeat ? 15 : 13,
-                      border: "none",
-                      padding: 0,
-                      cursor: "default",
-                      borderRadius: 999,
-                      background: isActive
-                        ? "rgba(255, 164, 126, 0.95)"
-                        : isBeat
-                          ? "rgba(183, 213, 255, 0.34)"
-                          : "rgba(180, 206, 255, 0.2)",
-                      boxShadow: isActive ? "0 0 14px rgba(255, 166, 129, 0.62)" : "none",
-                      transform: isActive ? "translateY(-1px) scale(1.03)" : "scale(1)",
-                      transition: "background 70ms linear, box-shadow 90ms linear, transform 70ms linear",
-                    }}
-                    aria-label={`Step ${i + 1}`}
-                  />
-                );
-              })}
+            <div style={{ display: "grid", gap: 8, padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
+              {CHAOS_LANES.map((lane) => (
+                <div key={lane.id} style={{ display: "grid", gridTemplateColumns: "52px repeat(16, minmax(0, 1fr))", gap: 4, alignItems: "center" }}>
+                  <span style={{ fontSize: 11, color: "rgba(214,231,255,0.92)", letterSpacing: "0.05em", textTransform: "uppercase" }}>{lane.label}</span>
+                  {Array.from({ length: CHAOS_STEPS }, (_, i) => {
+                    const cell = chaosPattern[lane.id][i];
+                    const isPlayhead = i === chaosVizStep;
+                    return (
+                      <button
+                        key={`${lane.id}-${i}`}
+                        type="button"
+                        onPointerDown={stopMixerEvent}
+                        onClick={(e) => {
+                          stopMixerEvent(e);
+                          if ((e as React.MouseEvent).shiftKey) toggleChaosAccent(lane.id, i);
+                          else toggleChaosStep(lane.id, i);
+                        }}
+                        onContextMenu={(e) => { e.preventDefault(); stopMixerEvent(e); toggleChaosAccent(lane.id, i); }}
+                        style={{ height: 24, border: "none", padding: 0, cursor: "pointer", borderRadius: 6, background: cell.on ? (cell.accent ? "rgba(255,180,126,0.96)" : "rgba(165,210,255,0.92)") : "rgba(120,145,180,0.22)", outline: isPlayhead ? "1px solid rgba(255,255,255,0.8)" : "1px solid rgba(255,255,255,0.08)", boxShadow: isPlayhead ? "0 0 10px rgba(255,255,255,0.5)" : "none" }}
+                        aria-label={`${lane.label} step ${i + 1}${cell.on ? " on" : " off"}${cell.accent ? ", accent" : ""}`}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: "rgba(210,224,246,0.72)" }}>Tap to toggle steps. Shift-tap or right-click to set accent.</div>
             </div>
             <label style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
