@@ -214,6 +214,11 @@ export default function SkyInstrument({
   const [audioMonitor, setAudioMonitor] = useState<AudioMonitorState>(DEFAULT_AUDIO_MONITOR_STATE);
   const [chaosVizStep, setChaosVizStep] = useState(0);
   const [chaosPattern, setChaosPattern] = useState<ChaosPattern>(() => makeDefaultChaosPattern());
+  const [pulseLock, setPulseLock] = useState(true);
+  const [holdChaos, setHoldChaos] = useState(false);
+  const [skyHold, setSkyHold] = useState(false);
+  const [activeTouches, setActiveTouches] = useState<Record<number, Pt>>({});
+  const [heldSkyVoices, setHeldSkyVoices] = useState<Pt[]>([]);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -483,6 +488,7 @@ export default function SkyInstrument({
     }, stepMs);
     return () => window.clearInterval(timer);
   }, [chaosTempoBpm, performanceMode, hasUnlockedAudio]);
+  const chaosRunning = performanceMode === "chaos" || holdChaos;
 
   const chaosTempoFeel = useMemo(() => {
     if (chaosTempoBpm <= 75) return "slow";
@@ -521,8 +527,15 @@ export default function SkyInstrument({
       chaosTempoBpm,
       trafficReliable,
       chaosPattern,
+      pulseLock,
+      holdChaos,
+      skyHold,
+      skyVoices:
+        performanceMode === "sky"
+          ? [...Object.values(activeTouches), ...heldSkyVoices].slice(0, 4)
+          : undefined,
     };
-  }, [birdsMix, chaosPattern, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, resolvedAirSignal, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [activeTouches, birdsMix, chaosPattern, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, heldSkyVoices, holdChaos, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -623,8 +636,13 @@ export default function SkyInstrument({
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
+    const nextPt = { x, y, pressure };
     setIsDragging(true);
-    setPt({ x, y, pressure });
+    setPt(nextPt);
+    if (performanceMode === "sky") {
+      setActiveTouches((prev) => ({ ...prev, [e.pointerId]: nextPt }));
+      if (!skyHold) setHeldSkyVoices([]);
+    }
     update(audioParams({ x, y, pressure }));
   }
 
@@ -633,7 +651,11 @@ export default function SkyInstrument({
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
-    setPt({ x, y, pressure });
+    const nextPt = { x, y, pressure };
+    setPt(nextPt);
+    if (performanceMode === "sky") {
+      setActiveTouches((prev) => (prev[e.pointerId] ? { ...prev, [e.pointerId]: nextPt } : prev));
+    }
     update(audioParams({ x, y, pressure }));
   }
 
@@ -642,6 +664,19 @@ export default function SkyInstrument({
     const { x, y } = getXY(e);
     setIsDragging(false);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
+    if (performanceMode === "sky") {
+      setActiveTouches((prev) => {
+        const next = { ...prev };
+        delete next[e.pointerId];
+        return next;
+      });
+      if (skyHold) {
+        setHeldSkyVoices((prev) => {
+          const src = activeTouches[e.pointerId] ?? { x, y, pressure: dronePressure };
+          return [...prev, src].slice(-4);
+        });
+      }
+    }
     update(audioParams({ x, y, pressure: dronePressure }));
   }
 
@@ -649,6 +684,10 @@ export default function SkyInstrument({
     if (!hasUnlockedAudio) return;
     setIsDragging(false);
     setPt((p) => ({ ...p, pressure: dronePressure }));
+    if (performanceMode === "sky" && !skyHold) {
+      setActiveTouches({});
+      setHeldSkyVoices([]);
+    }
     update(audioParams({ ...pt, pressure: dronePressure }));
   }
 
@@ -1007,6 +1046,16 @@ export default function SkyInstrument({
         >
           {performanceMode === "sky" ? "Mode: Sky" : "Mode: Chaos"}
         </button>
+        {performanceMode === "sky" && (
+          <button type="button" onClick={() => setSkyHold((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: skyHold ? "rgba(140, 210, 255, 0.32)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+            Hold {skyHold ? "On" : "Off"}
+          </button>
+        )}
+        {performanceMode === "sky" && skyHold && (
+          <button type="button" onClick={() => setHeldSkyVoices([])} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11 }}>
+            Clear Hold
+          </button>
+        )}
         <button
           type="button"
           onPointerDown={stopMixerEvent}
@@ -1639,7 +1688,16 @@ export default function SkyInstrument({
                 style={{ width: "100%", touchAction: "pan-y", height: 28 }}
               />
             </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => setPulseLock((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: pulseLock ? "rgba(146, 222, 185, 0.3)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Pulse Lock: {pulseLock ? "On" : "Off"}</button>
+              <button type="button" onClick={() => setHoldChaos((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: holdChaos ? "rgba(255, 184, 120, 0.3)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Hold Chaos: {holdChaos ? "On" : "Off"}</button>
+            </div>
           </div>
+        </div>
+      )}
+      {performanceMode === "sky" && chaosRunning && (
+        <div style={{ position: "absolute", right: `max(10px, calc(${safeInsetRight} + 8px))`, bottom: `max(12px, calc(${safeInsetBottom} + 10px))`, zIndex: 5, borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(9,16,30,0.5)", color: "rgba(236,246,255,0.92)", padding: "6px 10px", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          Chaos Held
         </div>
       )}
 
