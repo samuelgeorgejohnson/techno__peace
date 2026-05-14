@@ -543,7 +543,7 @@ export function useAudioEngine() {
     const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
     const placeDroneLevel = clamp(p.placeDroneLevel ?? 1, 0, 2);
     const airMix = clamp(p.airMix ?? 1, 0, 2);
-    const isChaosMode = p.performanceMode === "chaos";
+    const isChaosMode = p.performanceMode === "chaos" || Boolean(p.holdChaos);
     const trafficReliable = p.trafficReliable === true;
 
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
@@ -551,9 +551,21 @@ export function useAudioEngine() {
     const pitchHz = placeBaseHz * Math.pow(2, octaveOffset);
 
     const subHz = pitchHz / 2;
-    const rootHz = pitchHz;
-    const fifthHz = pitchHz * 1.5;
-    const octaveHz = pitchHz * 2;
+    let rootHz = pitchHz;
+    let fifthHz = pitchHz * 1.5;
+    let octaveHz = pitchHz * 2;
+    const voices = p.skyVoices ?? [];
+    if ((p.performanceMode ?? "sky") === "sky" && voices.length > 1) {
+      const steps = [0, 2, 4, 7, 9];
+      const voiceHz = (vx: number) => {
+        const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
+        const octave = Math.floor(clamp(vx) * 2);
+        return placeBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
+      };
+      rootHz = voiceHz(voices[0]?.x ?? 0.5);
+      fifthHz = voiceHz(voices[1]?.x ?? voices[0]?.x ?? 0.5);
+      octaveHz = voiceHz(voices[2]?.x ?? voices[voices.length - 1]?.x ?? 0.5);
+    }
 
     const brightnessCutoff = 300 + Math.pow(1 - y, 2) * 5000;
     const humiditySoftening = 1 - 0.35 * humidityNorm;
@@ -803,10 +815,11 @@ export function useAudioEngine() {
           hat.stop(stepTime + 0.06);
         }
 
-        if (chaosDuckGainRef.current && isKickStep) {
+        if (chaosDuckGainRef.current && isKickStep && p.pulseLock) {
           chaosDuckGainRef.current.gain.cancelScheduledValues(stepTime);
-          chaosDuckGainRef.current.gain.setValueAtTime(0.86, stepTime);
-          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.13);
+          const pulseDepth = clamp(0.08 + pressure * 0.08, 0.06, 0.17);
+          chaosDuckGainRef.current.gain.setValueAtTime(1 - pulseDepth, stepTime);
+          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.18);
         }
 
         chaosStepRef.current = (chaosStepRef.current + 1) % laneSteps;
@@ -915,6 +928,7 @@ export function useAudioEngine() {
     chaosBassFilterRef.current?.frequency.setTargetAtTime(clamp(120 + (1 - y) * 420 + pressure * 220, 90, 700), now, 0.06);
     chaosBassFilterRef.current?.Q.setTargetAtTime(clamp(0.8 + pressure * 1.5, 0.8, 2.4), now, 0.06);
     chaosHatFilterRef.current?.frequency.setTargetAtTime(clamp(1300 + (1 - y) * 2600 + windNorm * 380, 1100, 4800), now, 0.08);
+    if (!p.pulseLock) chaosDuckGainRef.current?.gain.setTargetAtTime(1, now, 0.2);
 
     lfoRef.current?.frequency.setTargetAtTime(clamp(0.04 + 0.18 * atmosphericTurbulence + 0.08 * sunNorm, 0.04, 0.42), now, 0.2);
     lfoGainRef.current?.gain.setTargetAtTime(clamp(0.0025 + 0.006 * atmosphericTurbulence + 0.004 * moonExposure + starExposure * 0.002, 0.002, 0.02), now, 0.24);

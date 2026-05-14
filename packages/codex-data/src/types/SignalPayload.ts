@@ -53,6 +53,10 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   chaosTempoBpm?: number;
   trafficReliable?: boolean;
   chaosPattern?: ChaosPattern;
+  pulseLock?: boolean;
+  holdChaos?: boolean;
+  skyHold?: boolean;
+  skyVoices?: Array<{ x: number; y: number; pressure: number }>;
 };
 
 /**
