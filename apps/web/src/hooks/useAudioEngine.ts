@@ -38,6 +38,9 @@ export function useAudioEngine() {
   const ctxRef = useRef<AudioContext | null>(null);
 
   const subRef = useRef<OscillatorNode | null>(null);
+  const infraRootRef = useRef<OscillatorNode | null>(null);
+  const infraOctaveRef = useRef<OscillatorNode | null>(null);
+  const infraSubOctaveRef = useRef<OscillatorNode | null>(null);
   const rootRef = useRef<OscillatorNode | null>(null);
   const fifthRef = useRef<OscillatorNode | null>(null);
   const octaveRef = useRef<OscillatorNode | null>(null);
@@ -62,6 +65,8 @@ export function useAudioEngine() {
   const chaosHatGainRef = useRef<GainNode | null>(null);
 
   const baseFilterRef = useRef<BiquadFilterNode | null>(null);
+  const infraFilterRef = useRef<BiquadFilterNode | null>(null);
+  const infraSaturationRef = useRef<WaveShaperNode | null>(null);
   const weatherFilterRef = useRef<BiquadFilterNode | null>(null);
   const mainSignalPostFilterRef = useRef<BiquadFilterNode | null>(null);
   const mainSignalSaturationRef = useRef<WaveShaperNode | null>(null);
@@ -120,6 +125,9 @@ export function useAudioEngine() {
 
   function resetGraph() {
     subRef.current = null;
+    infraRootRef.current = null;
+    infraOctaveRef.current = null;
+    infraSubOctaveRef.current = null;
     rootRef.current = null;
     fifthRef.current = null;
     octaveRef.current = null;
@@ -144,6 +152,8 @@ export function useAudioEngine() {
     chaosHatGainRef.current = null;
 
     baseFilterRef.current = null;
+    infraFilterRef.current = null;
+    infraSaturationRef.current = null;
     weatherFilterRef.current = null;
     mainSignalPostFilterRef.current = null;
     mainSignalSaturationRef.current = null;
@@ -282,6 +292,18 @@ export function useAudioEngine() {
     octave.type = "triangle";
     octave.frequency.value = 220;
     octaveRef.current = octave;
+    const infraRoot = ctx.createOscillator();
+    infraRoot.type = "sine";
+    infraRoot.frequency.value = 110;
+    infraRootRef.current = infraRoot;
+    const infraOctave = ctx.createOscillator();
+    infraOctave.type = "triangle";
+    infraOctave.frequency.value = 55;
+    infraOctaveRef.current = infraOctave;
+    const infraSubOctave = ctx.createOscillator();
+    infraSubOctave.type = "sine";
+    infraSubOctave.frequency.value = 27.5;
+    infraSubOctaveRef.current = infraSubOctave;
 
     const subGain = ctx.createGain();
     subGain.gain.value = 0.25;
@@ -291,6 +313,12 @@ export function useAudioEngine() {
     fifthGain.gain.value = 0.18;
     const octaveGain = ctx.createGain();
     octaveGain.gain.value = 0.08;
+    const infraRootGain = ctx.createGain();
+    infraRootGain.gain.value = 0.085;
+    const infraOctaveGain = ctx.createGain();
+    infraOctaveGain.gain.value = 0.07;
+    const infraSubOctaveGain = ctx.createGain();
+    infraSubOctaveGain.gain.value = 0.03;
 
     const buffer = ctx.createBuffer(1, ctx.sampleRate * 1.0, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -316,6 +344,15 @@ export function useAudioEngine() {
     mainSignalPostFilter.frequency.value = 1400;
     mainSignalPostFilter.Q.value = 0.8;
     mainSignalPostFilterRef.current = mainSignalPostFilter;
+    const infraFilter = ctx.createBiquadFilter();
+    infraFilter.type = "lowpass";
+    infraFilter.frequency.value = 170;
+    infraFilter.Q.value = 0.82;
+    infraFilterRef.current = infraFilter;
+    const infraSaturation = ctx.createWaveShaper();
+    infraSaturation.curve = new Float32Array([-1, -0.94, -0.44, 0, 0.44, 0.94, 1]);
+    infraSaturation.oversample = "2x";
+    infraSaturationRef.current = infraSaturation;
     const mainSignalSaturation = ctx.createWaveShaper();
     mainSignalSaturation.curve = new Float32Array([-1, -0.85, -0.3, 0, 0.3, 0.85, 1]);
     mainSignalSaturation.oversample = "2x";
@@ -446,10 +483,18 @@ export function useAudioEngine() {
     root.connect(rootGain);
     fifth.connect(fifthGain);
     octave.connect(octaveGain);
+    infraRoot.connect(infraRootGain);
+    infraOctave.connect(infraOctaveGain);
+    infraSubOctave.connect(infraSubOctaveGain);
     subGain.connect(baseFilter);
     rootGain.connect(baseFilter);
     fifthGain.connect(baseFilter);
     octaveGain.connect(baseFilter);
+    infraRootGain.connect(infraFilter);
+    infraOctaveGain.connect(infraFilter);
+    infraSubOctaveGain.connect(infraFilter);
+    infraFilter.connect(infraSaturation);
+    infraSaturation.connect(mainSignalGain);
     baseFilter.connect(mainSignalGain);
     mainSignalGain.connect(mainSignalPostFilter);
     mainSignalPostFilter.connect(mainSignalSaturation);
@@ -513,6 +558,9 @@ export function useAudioEngine() {
     airMotionGain.connect(airToneFilter.frequency);
 
     sub.start();
+    infraRoot.start();
+    infraOctave.start();
+    infraSubOctave.start();
     root.start();
     fifth.start();
     octave.start();
@@ -551,6 +599,9 @@ export function useAudioEngine() {
     const pitchHz = placeBaseHz * Math.pow(2, octaveOffset);
 
     const subHz = pitchHz / 2;
+    const infraRootHz = placeBaseHz;
+    const infraOctaveHz = placeBaseHz / 2;
+    const infraSubOctaveHz = placeBaseHz / 4;
     let rootHz = pitchHz;
     let fifthHz = pitchHz * 1.5;
     let octaveHz = pitchHz * 2;
@@ -605,6 +656,7 @@ export function useAudioEngine() {
     const atmosphericTurbulence = clamp(0.12 + windNorm * 0.8 + midCloud * 0.15, 0.08, 1);
     const harmonicExposure = clamp(0.42 + clearSky * 0.45 + dayness * 0.12 - highCloud * 0.24, 0.2, 1.2);
     const fieldDensity = clamp(0.3 + humidityNorm * 0.35 + lowCloud * 0.18 + rainNorm * 0.35 + dayness * 0.1, 0.2, 1.3);
+    const earthExposure = clamp(Math.pow(1 - y, 1.25), 0, 1);
     const morningLift = clamp(1 - Math.abs(sunNorm - 0.3) / 0.25, 0, 1);
     const birdWeatherSuppression = clamp((1 - 0.75 * rainNorm) * (1 - 0.55 * windNorm), 0, 1);
     const birdActivity = clamp((0.2 + 0.8 * dayness) * (0.45 + 0.55 * morningLift) * birdWeatherSuppression * birdsLevel, 0, 2);
@@ -628,6 +680,11 @@ export function useAudioEngine() {
       (isChaosMode ? 0.03 + trafficDensityColor * 0.045 : trafficDensity * 0.08) * (trafficReliable || !isChaosMode ? 1 : 0.8),
       0,
       0.09,
+    );
+    const infrastructurePressure = clamp(
+      0.34 + earthExposure * 0.5 + trafficDensity * 0.24 + humidityNorm * 0.08 + rainNorm * 0.08 - clearSky * 0.07,
+      0.28,
+      0.95,
     );
     const windInfluence = windNorm;
     const rainInfluence = rainNorm;
@@ -833,6 +890,7 @@ export function useAudioEngine() {
 
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);
     const baseDroneMix = clamp((0.176 + 0.128 * pressure) * placeDroneLevel, 0, 0.84);
+    const substructureMix = clamp(baseDroneMix * infrastructurePressure, 0.04, 0.42);
     const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
@@ -846,6 +904,9 @@ export function useAudioEngine() {
     const gate = (active: boolean) => (active ? 1 : 0);
 
     subRef.current?.frequency.setTargetAtTime(subHz, now, 0.04);
+    infraRootRef.current?.frequency.setTargetAtTime(infraRootHz, now, 0.24);
+    infraOctaveRef.current?.frequency.setTargetAtTime(infraOctaveHz, now, 0.24);
+    infraSubOctaveRef.current?.frequency.setTargetAtTime(infraSubOctaveHz, now, 0.3);
     rootRef.current?.frequency.setTargetAtTime(rootHz, now, 0.04);
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
@@ -858,6 +919,12 @@ export function useAudioEngine() {
       0.14,
     );
     baseFilterRef.current?.Q.setTargetAtTime(clamp(baseQ + atmosphericTurbulence * 0.2 - atmosphericDiffusion * 0.12, 0.45, 1.4), now, 0.16);
+    infraFilterRef.current?.frequency.setTargetAtTime(
+      clamp(110 + earthExposure * 70 + clearSky * 26 - humidityNorm * 18 + trafficDensity * 18, 90, 220),
+      now,
+      0.24,
+    );
+    infraFilterRef.current?.Q.setTargetAtTime(clamp(0.7 + trafficDensity * 0.25 + windNorm * 0.18, 0.68, 1.2), now, 0.26);
 
     weatherFilterRef.current?.frequency.setTargetAtTime(weatherFilterHz, now, 0.1);
     weatherFilterRef.current?.Q.setTargetAtTime(clamp(0.5 + 0.6 * windNorm, 0.5, 1.4), now, 0.1);
@@ -916,6 +983,11 @@ export function useAudioEngine() {
 
     masterGainRef.current?.gain.setTargetAtTime(master, now, 0.12);
     baseDroneGainRef.current?.gain.setTargetAtTime(baseDroneMix * droneDuck * gate(monitorState.baseDrone), now, 0.22);
+    mainSignalGainRef.current?.gain.setTargetAtTime(
+      clamp(1 + substructureMix * 0.35, 1, 1.15) * gate(monitorState.baseDrone),
+      now,
+      0.24,
+    );
     weatherGainRef.current?.gain.setTargetAtTime(clamp(p.windMps / 20, 0, 2), now, 0.16);
     celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel * gate(monitorState.chimes), now, 0.2);
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
