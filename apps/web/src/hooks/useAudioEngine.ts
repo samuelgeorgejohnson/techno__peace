@@ -696,7 +696,8 @@ export function useAudioEngine() {
     const chaosStepSeconds = 60 / chaosTempoBpm / 4;
     const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
     const chaosBassRootHz = placeBaseHz / 2;
-    const chaosBassHz = clamp(chaosBassRootHz * Math.pow(2, (x - 0.5) * 1.7), 30, 180);
+    const chaosBassSubHz = placeBaseHz / 4;
+    const chaosBassHz = clamp(chaosBassRootHz, 32, 120);
     const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
     const chaosDrive = clamp(0.2 + pressure * 0.8, 0.2, 1);
 
@@ -830,8 +831,8 @@ export function useAudioEngine() {
           const kickGain = ctx.createGain();
           const accent = laneAccent("kick") ? 1.3 : 1;
           kick.type = pressure > 0.6 ? "triangle" : "sine";
-          kick.frequency.setValueAtTime(chaosBassHz * 1.7, stepTime);
-          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassHz * 0.76), stepTime + 0.11);
+          kick.frequency.setValueAtTime(chaosBassRootHz * 2.1, stepTime);
+          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassSubHz * 1.15), stepTime + 0.11);
           kickGain.gain.setValueAtTime(0.0001, stepTime);
           kickGain.gain.exponentialRampToValueAtTime((0.08 + 0.08 * chaosDrive) * accent, stepTime + 0.01);
           kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.16);
@@ -843,33 +844,49 @@ export function useAudioEngine() {
 
         if (isBassStep) {
           const bass = ctx.createOscillator();
+          const bassSub = ctx.createOscillator();
           const bassGain = ctx.createGain();
+          const bassFilter = ctx.createBiquadFilter();
           const accent = laneAccent("bass") ? 1.35 : 1;
           bass.type = "sawtooth";
-          const bassStepRatio = Math.pow(2, (x - 0.5) * 0.55);
-          bass.frequency.setValueAtTime(clamp(chaosBassHz * bassStepRatio, 32, 190), stepTime);
+          bassSub.type = "sine";
+          bass.frequency.setValueAtTime(chaosBassRootHz, stepTime);
+          bassSub.frequency.setValueAtTime(chaosBassSubHz, stepTime);
+          bassFilter.type = "lowpass";
+          bassFilter.frequency.setValueAtTime(clamp(120 + (1 - y) * 140, 90, 260), stepTime);
+          bassFilter.Q.setValueAtTime(0.72, stepTime);
           bassGain.gain.setValueAtTime(0.0001, stepTime);
-          bassGain.gain.exponentialRampToValueAtTime((0.05 + 0.04 * chaosDrive) * accent, stepTime + 0.02);
+          bassGain.gain.exponentialRampToValueAtTime((0.065 + 0.055 * chaosDrive) * accent, stepTime + 0.02);
           bassGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + (0.28 + 0.15 * (1 - y)));
-          bass.connect(bassGain);
+          bass.connect(bassFilter);
+          bassSub.connect(bassFilter);
+          bassFilter.connect(bassGain);
           bassGain.connect(chaosKickGainRef.current);
           bass.start(stepTime);
+          bassSub.start(stepTime);
           bass.stop(stepTime + 0.52);
+          bassSub.stop(stepTime + 0.52);
         }
 
         if (isHatStep) {
-          const hat = ctx.createOscillator();
+          const hatNoise = ctx.createBufferSource();
+          const hatBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.03), ctx.sampleRate);
+          const hatData = hatBuffer.getChannelData(0);
+          for (let i = 0; i < hatData.length; i += 1) hatData[i] = (Math.random() * 2 - 1) * (1 - i / hatData.length);
+          hatNoise.buffer = hatBuffer;
           const hatGain = ctx.createGain();
+          const hatFilter = ctx.createBiquadFilter();
           const accent = laneAccent("hat") ? 1.25 : 1;
-          hat.type = "triangle";
-          hat.frequency.setValueAtTime(1800 + windNorm * 380 + humidityNorm * 120, stepTime);
+          hatFilter.type = "bandpass";
+          hatFilter.frequency.setValueAtTime(4800 + windNorm * 700 - humidityNorm * 300, stepTime);
+          hatFilter.Q.setValueAtTime(0.9, stepTime);
           hatGain.gain.setValueAtTime(0.0001, stepTime);
-          hatGain.gain.exponentialRampToValueAtTime((0.009 + 0.016 * pressure + 0.01 * windNorm) * accent, stepTime + 0.005);
-          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.045);
-          hat.connect(hatGain);
+          hatGain.gain.exponentialRampToValueAtTime((0.02 + 0.02 * pressure + 0.012 * windNorm) * accent, stepTime + 0.003);
+          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.05);
+          hatNoise.connect(hatFilter);
+          hatFilter.connect(hatGain);
           hatGain.connect(chaosHatGainRef.current);
-          hat.start(stepTime);
-          hat.stop(stepTime + 0.06);
+          hatNoise.start(stepTime);
         }
 
         if (chaosDuckGainRef.current && isKickStep && p.pulseLock) {
