@@ -65,6 +65,7 @@ function buildProceduralAirSignal(lat: number, lon: number, isDay: boolean): Air
 }
 
 type Pt = { x: number; y: number; pressure: number };
+type ActiveTouch = Pt & { pointerId: number; startedAt: number; voiceId: number };
 
 const CHAOS_STEPS = 16;
 const CHAOS_LANES: Array<{ id: ChaosLaneId; label: string }> = [
@@ -217,8 +218,9 @@ export default function SkyInstrument({
   const [pulseLock, setPulseLock] = useState(true);
   const [holdChaos, setHoldChaos] = useState(false);
   const [skyHold, setSkyHold] = useState(false);
-  const [activeTouches, setActiveTouches] = useState<Record<number, Pt>>({});
+  const [activeTouches, setActiveTouches] = useState<Record<number, ActiveTouch>>({});
   const [heldSkyVoices, setHeldSkyVoices] = useState<Pt[]>([]);
+  const nextVoiceIdRef = useRef(1);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
@@ -628,8 +630,13 @@ export default function SkyInstrument({
     fadeFrameRef.current = requestAnimationFrame(tick);
   }
 
+  function isPerformancePointerTarget(target: EventTarget | null) {
+    return target instanceof HTMLElement && target.closest("[data-sky-control='true']") === null;
+  }
+
   async function onPointerDown(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio) return;
+    if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
+    e.preventDefault();
 
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
 
@@ -640,29 +647,32 @@ export default function SkyInstrument({
     setIsDragging(true);
     setPt(nextPt);
     if (performanceMode === "sky") {
-      setActiveTouches((prev) => ({ ...prev, [e.pointerId]: nextPt }));
+      const voiceId = nextVoiceIdRef.current++;
+      setActiveTouches((prev) => ({ ...prev, [e.pointerId]: { ...nextPt, pointerId: e.pointerId, startedAt: performance.now(), voiceId } }));
       if (!skyHold) setHeldSkyVoices([]);
     }
     update(audioParams({ x, y, pressure }));
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio || !isDragging || e.buttons === 0) return;
+    if (mixerOpen || !hasUnlockedAudio || !isDragging || !isPerformancePointerTarget(e.target)) return;
+    e.preventDefault();
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
     const nextPt = { x, y, pressure };
     setPt(nextPt);
     if (performanceMode === "sky") {
-      setActiveTouches((prev) => (prev[e.pointerId] ? { ...prev, [e.pointerId]: nextPt } : prev));
+      setActiveTouches((prev) => (prev[e.pointerId] ? { ...prev, [e.pointerId]: { ...prev[e.pointerId], ...nextPt } } : prev));
     }
     update(audioParams({ x, y, pressure }));
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio) return;
+    if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
+    e.preventDefault();
     const { x, y } = getXY(e);
-    setIsDragging(false);
+    setIsDragging(Object.keys(activeTouches).length > 1);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
     if (performanceMode === "sky") {
       setActiveTouches((prev) => {
@@ -707,6 +717,7 @@ export default function SkyInstrument({
   }
 
   function stopMixerEvent(e: React.SyntheticEvent) {
+    e.preventDefault();
     e.stopPropagation();
   }
 
@@ -816,6 +827,7 @@ export default function SkyInstrument({
 
   return (
     <div
+      data-sky-surface="true"
       ref={elRef}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -948,6 +960,7 @@ export default function SkyInstrument({
       />
 
       <a
+        data-sky-control="true"
         href="/"
         onPointerDown={stopMixerEvent}
         onPointerUp={stopMixerEvent}
@@ -973,6 +986,7 @@ export default function SkyInstrument({
       </a>
 
       <div
+        data-sky-control="true"
         onPointerDown={stopMixerEvent}
         onPointerMove={stopMixerEvent}
         onPointerUp={stopMixerEvent}
