@@ -663,9 +663,19 @@ export function useAudioEngine() {
     daylifeActivityRef.current += (birdActivity - daylifeActivityRef.current) * 0.12;
     const birdDensity = clamp(0.05 + 1.4 * daylifeActivityRef.current, 0, 2.2);
 
-    const chimeActivityTarget = clamp((0.08 + windNorm * 1.25) * (1 - 0.55 * precipNorm) * (0.7 + 0.3 * clearSky) * chimesLevel, 0, 2);
+    const chimeWind = clamp((p.windMps - 0.7) / 11.3);
+    const chimeWindDrive = Math.pow(chimeWind, 1.25);
+    const chimePrecipSuppression = clamp(1 - precipNorm * 0.92, 0.02, 1);
+    const chimeRainDamping = clamp(1 - rainNorm * 0.72, 0.18, 1);
+    const chimeMoonSpace = clamp(nightness * clearSky * (0.25 + moonNorm * 0.75), 0, 1);
+    const chimeOutputAmount = chimesLevel;
+    const chimePresence = clamp(chimeOutputAmount / 1.4, 0, 1);
+    const chimeActivityTarget = clamp(chimeWindDrive * chimePrecipSuppression, 0, 1.4);
     chimeActivityRef.current += (chimeActivityTarget - chimeActivityRef.current) * 0.1;
-    const chimeDensity = clamp(0.08 + 0.34 * chimeActivityRef.current, 0.08, 0.55);
+    const chimeStrikeProbability = clamp(0.12 + 0.34 * chimeActivityRef.current, 0.08, 0.42);
+    const chimeClusterChance = clamp(Math.pow(chimeWind, 1.7) * chimePrecipSuppression * 0.42, 0, 0.42);
+    const chimeStrikeAmp = clamp(0.018 + 0.058 * Math.pow(chimeWind, 0.8), 0.018, 0.082) * chimeRainDamping;
+    const chimeStrikeDecay = clamp((1.8 + 2.5 * (1 - chimeWind) + 1.7 * chimeMoonSpace) * (0.45 + 0.55 * chimeRainDamping), 0.9, 6.2);
 
     const trafficFromPayload = p.road;
     const trafficDensityColor = clamp(trafficFromPayload?.normalized?.density ?? 0.35);
@@ -739,28 +749,35 @@ export function useAudioEngine() {
       nextDaylifeEventRef.current = now + (0.16 + (1 - clamp(birdActivity / 2)) * 0.7) * (0.8 + Math.random() * 0.6);
     }
 
-    if (now >= nextChimeEventRef.current && chimeActivityRef.current > 0.03 && chimeFilterRef.current) {
-      if (Math.random() < chimeDensity * 0.35) {
-        const base = clamp(420 + Math.random() * 740, 420, 1160);
+    if (now >= nextChimeEventRef.current && chimeActivityRef.current > 0.025 && chimeOutputAmount > 0.001 && chimeFilterRef.current) {
+      if (Math.random() < chimeStrikeProbability) {
         const ratios = [1, 1.5, 2.24, 3.17];
-        const decay = 2.8 + Math.random() * 3.8;
-        const amp = clamp(0.045 + Math.random() * 0.04, 0.045, 0.085) * clamp(chimesLevel / 1.15, 0, 1.8);
-        ratios.forEach((ratio, idx) => {
-          const part = ctx.createOscillator();
-          const partGain = ctx.createGain();
-          part.type = "sine";
-          part.frequency.setValueAtTime(base * ratio, now);
-          partGain.gain.setValueAtTime(0.000001, now);
-          partGain.gain.exponentialRampToValueAtTime(amp / (1 + idx * 0.8), now + 0.01);
-          partGain.gain.exponentialRampToValueAtTime(0.000001, now + decay * (0.75 + idx * 0.2));
-          part.connect(partGain);
-          partGain.connect(chimeFilterRef.current!);
-          part.start(now);
-          part.stop(now + decay * (0.95 + idx * 0.25));
-        });
-        console.log("[audio] chime event", { chimesLevel, chimeActivity: chimeActivityRef.current, base, decay, amp });
+        const strike = (offset: number, ampScale: number) => {
+          const strikeTime = now + offset;
+          const base = clamp(420 + Math.random() * 740 + chimeWind * 120, 420, 1280);
+          const decay = chimeStrikeDecay * (0.88 + Math.random() * 0.24);
+          const amp = chimeStrikeAmp * ampScale;
+          ratios.forEach((ratio, idx) => {
+            const part = ctx.createOscillator();
+            const partGain = ctx.createGain();
+            part.type = "sine";
+            part.frequency.setValueAtTime(base * ratio, strikeTime);
+            partGain.gain.setValueAtTime(0.000001, strikeTime);
+            partGain.gain.exponentialRampToValueAtTime(amp / (1 + idx * 0.8), strikeTime + 0.01);
+            partGain.gain.exponentialRampToValueAtTime(0.000001, strikeTime + decay * (0.75 + idx * 0.2));
+            part.connect(partGain);
+            partGain.connect(chimeFilterRef.current!);
+            part.start(strikeTime);
+            part.stop(strikeTime + decay * (0.95 + idx * 0.25));
+          });
+          console.log("[audio] chime event", { windMps: p.windMps, chimeActivity: chimeActivityRef.current, base, decay, amp });
+        };
+
+        strike(0, 1);
+        if (Math.random() < chimeClusterChance) strike(0.16 + Math.random() * 0.18, 0.68);
+        if (Math.random() < chimeClusterChance * 0.32) strike(0.38 + Math.random() * 0.22, 0.46);
       }
-      nextChimeEventRef.current = now + (2.6 + (1 - clamp(chimeActivityRef.current / 2)) * 6.6) * (0.9 + Math.random() * 0.6);
+      nextChimeEventRef.current = now + clamp(2.1 + (1 - clamp(chimeActivityRef.current)) * 4.6, 2.1, 6.7) * (0.9 + Math.random() * 0.65);
     }
 
     if (now >= nextAirPassEventRef.current && airMix > 0.01 && airPannerRef.current && airToneFilterRef.current) {
@@ -908,7 +925,7 @@ export function useAudioEngine() {
     const master = clamp(0.14 + 0.14 * pressure, 0.12, 0.24);
     const baseDroneMix = clamp((0.176 + 0.128 * pressure) * placeDroneLevel, 0, 0.84);
     const substructureMix = clamp(baseDroneMix * infrastructurePressure, 0.04, 0.42);
-    const celestialMix = clamp(0.12 + 0.2 * moonNorm, 0, 0.42);
+    const chimeLayerMix = clamp(0.24 * chimeOutputAmount, 0, 0.48);
     const lifeMix = clamp(0.06 + 0.24 * birdsLevel * (0.2 + 0.8 * dayness), 0, 0.55);
     const airLayerMix = clamp(airMix * 0.45, 0, 0.8);
     const trafficLayerMix = clamp(isChaosMode ? 0.16 + trafficDensityColor * 0.18 : 0.18 + trafficDensity * 0.28, 0, 0.65);
@@ -965,9 +982,9 @@ export function useAudioEngine() {
     daylifeFilterRef.current?.Q.setTargetAtTime(2.2, now, 0.18);
     daylifeGainRef.current?.gain.setTargetAtTime(clamp(0.14 + 0.35 * daylifeActivityRef.current, 0.1, 0.55), now, 0.2);
 
-    chimeFilterRef.current?.frequency.setTargetAtTime(clamp(680 + windNorm * 900 + starExposure * 260, 650, 1850), now, 0.22);
-    chimeFilterRef.current?.Q.setTargetAtTime(clamp(4.8 + atmosphericTurbulence * 1.1, 4.8, 6.8), now, 0.24);
-    chimeGainRef.current?.gain.setTargetAtTime(clamp(0.16 + 0.44 * chimeActivityRef.current, 0.14, 0.75), now, 0.22);
+    chimeFilterRef.current?.frequency.setTargetAtTime(clamp(680 + chimeWind * 900 + chimePresence * 170 - precipNorm * 180, 620, 1850), now, 0.22);
+    chimeFilterRef.current?.Q.setTargetAtTime(clamp(4.6 + chimeWind * 0.7 + chimeMoonSpace * 1.2 - precipNorm * 0.9, 3.8, 6.8), now, 0.24);
+    chimeGainRef.current?.gain.setTargetAtTime(clamp(0.08 + 0.46 * chimeActivityRef.current, 0.04, 0.66), now, 0.22);
 
     trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * proximity, 60, 170), now, 0.2);
     trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
@@ -1006,7 +1023,7 @@ export function useAudioEngine() {
       0.24,
     );
     weatherGainRef.current?.gain.setTargetAtTime(clamp(p.windMps / 20, 0, 2), now, 0.16);
-    celestialGainRef.current?.gain.setTargetAtTime(celestialMix * chimesLevel * gate(monitorState.chimes), now, 0.2);
+    celestialGainRef.current?.gain.setTargetAtTime(chimeLayerMix * gate(monitorState.chimes), now, 0.2);
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
     airGainRef.current?.gain.setTargetAtTime(airLayerMix * gate(monitorState.air), now, 0.16);
     trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain * gate(monitorState.traffic), now, 0.2);
