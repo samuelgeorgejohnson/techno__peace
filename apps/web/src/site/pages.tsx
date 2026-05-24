@@ -4,20 +4,20 @@ function OverviewCards() {
   return (
     <div className="tp-site-overview-grid">
       <article className="tp-site-overview-card">
-        <h2>Our Mission</h2>
-        <p>Technology in service of peace, place, and careful attention.</p>
+        <h2>World</h2>
+        <p>Public essays, field notes, and a living archive of atmosphere.</p>
       </article>
       <article className="tp-site-overview-card">
-        <h2>Essays & Reflections</h2>
-        <p>Writing on listening, culture, climate, and shared futures.</p>
+        <h2>Sky</h2>
+        <p>An interactive instrument tuned by time, cloud, sun, and moon.</p>
       </article>
       <article className="tp-site-overview-card">
-        <h2>Field Recordings</h2>
-        <p>Field-captured atmospheres from real places, shared openly.</p>
+        <h2>Archive</h2>
+        <p>Recorded environments and sonic traces from specific places.</p>
       </article>
       <article className="tp-site-overview-card">
-        <h2>About TechnoPeace</h2>
-        <p>Background, collaborators, and ways to reach the project.</p>
+        <h2>Contact</h2>
+        <p>Collaborators, context, and pathways into the work.</p>
       </article>
     </div>
   );
@@ -27,8 +27,8 @@ export function SiteHomePage() {
   return (
     <SiteLayout
       title="TechnoPeace"
-      subtitle="Listening as practice, atmosphere as instrument."
-      description="A responsive environmental instrument for tuning attention to weather, place, and human signal."
+      subtitle="Calm systems for peace, weather, and attention."
+      description="A cinematic world site and a gateway into Sky Mode, where live local conditions gently shape light, haze, and sound."
     >
       <OverviewCards />
     </SiteLayout>
