@@ -198,6 +198,8 @@ export default function SkyInstrument({
 }: SkyInstrumentProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
+  const chaosLongPressTimersRef = useRef<Map<number, number>>(new Map());
+  const chaosLongPressConsumedRef = useRef<Set<string>>(new Set());
   const { start, update, isRunning, setAudioMonitorState } = useAudioEngine();
   const weather = useCurrentWeatherSignal();
 
@@ -702,6 +704,30 @@ export default function SkyInstrument({
   }
 
 
+  function clearChaosLongPress(pointerId: number) {
+    const timer = chaosLongPressTimersRef.current.get(pointerId);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      chaosLongPressTimersRef.current.delete(pointerId);
+    }
+  }
+
+  function startChaosLongPress(pointerId: number, lane: ChaosLaneId, step: number) {
+    clearChaosLongPress(pointerId);
+    const gestureKey = `${lane}-${step}`;
+    const timer = window.setTimeout(() => {
+      chaosLongPressConsumedRef.current.add(gestureKey);
+      toggleChaosAccent(lane, step);
+      chaosLongPressTimersRef.current.delete(pointerId);
+    }, 420);
+    chaosLongPressTimersRef.current.set(pointerId, timer);
+  }
+
+  function stopControlEvent(e: React.SyntheticEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
   function toggleChaosStep(lane: ChaosLaneId, step: number) {
     setChaosPattern((prev) => ({
       ...prev,
@@ -717,8 +743,7 @@ export default function SkyInstrument({
   }
 
   function stopMixerEvent(e: React.SyntheticEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+    stopControlEvent(e);
   }
 
   function updateChannelLevel(channelId: string, level: number) {
@@ -1199,6 +1224,13 @@ export default function SkyInstrument({
         >
           <div style={{ width: "min(980px, 100%)", maxHeight: "100%", overflow: "auto", borderRadius: 16, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(4, 8, 20, 0.9)", backdropFilter: "blur(12px)", padding: 12 }}>
           <div
+            data-sky-control="true"
+            onPointerDown={stopMixerEvent}
+            onPointerMove={stopMixerEvent}
+            onPointerUp={stopMixerEvent}
+            onPointerCancel={stopMixerEvent}
+            onClick={stopMixerEvent}
+            onContextMenu={stopMixerEvent}
             style={{
               border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 12,
@@ -1620,6 +1652,13 @@ export default function SkyInstrument({
           }}
         >
           <div
+            data-sky-control="true"
+            onPointerDown={stopMixerEvent}
+            onPointerMove={stopMixerEvent}
+            onPointerUp={stopMixerEvent}
+            onPointerCancel={stopMixerEvent}
+            onClick={stopMixerEvent}
+            onContextMenu={stopMixerEvent}
             style={{
               width: "min(620px, 100%)",
               borderRadius: 16,
@@ -1671,13 +1710,30 @@ export default function SkyInstrument({
                       <button
                         key={`${lane.id}-${i}`}
                         type="button"
-                        onPointerDown={stopMixerEvent}
+                        onPointerDown={(e) => {
+                          stopMixerEvent(e);
+                          startChaosLongPress(e.pointerId, lane.id, i);
+                        }}
+                        onPointerUp={(e) => {
+                          stopMixerEvent(e);
+                          clearChaosLongPress(e.pointerId);
+                        }}
+                        onPointerMove={stopMixerEvent}
+                        onPointerCancel={(e) => {
+                          stopMixerEvent(e);
+                          clearChaosLongPress(e.pointerId);
+                        }}
                         onClick={(e) => {
                           stopMixerEvent(e);
+                          const gestureKey = `${lane.id}-${i}`;
+                          if (chaosLongPressConsumedRef.current.delete(gestureKey)) return;
                           if ((e as React.MouseEvent).shiftKey) toggleChaosAccent(lane.id, i);
                           else toggleChaosStep(lane.id, i);
                         }}
-                        onContextMenu={(e) => { e.preventDefault(); stopMixerEvent(e); toggleChaosAccent(lane.id, i); }}
+                        onContextMenu={(e) => {
+                          stopMixerEvent(e);
+                          toggleChaosAccent(lane.id, i);
+                        }}
                         style={{ height: 24, border: "none", padding: 0, cursor: "pointer", borderRadius: 6, background: cell.on ? (cell.accent ? "rgba(255,180,126,0.96)" : "rgba(165,210,255,0.92)") : "rgba(120,145,180,0.22)", outline: isPlayhead ? "1px solid rgba(255,255,255,0.8)" : "1px solid rgba(255,255,255,0.08)", boxShadow: isPlayhead ? "0 0 10px rgba(255,255,255,0.5)" : "none" }}
                         aria-label={`${lane.label} step ${i + 1}${cell.on ? " on" : " off"}${cell.accent ? ", accent" : ""}`}
                       />
@@ -1685,7 +1741,7 @@ export default function SkyInstrument({
                   })}
                 </div>
               ))}
-              <div style={{ fontSize: 11, color: "rgba(210,224,246,0.72)" }}>Tap to toggle steps. Shift-tap or right-click to set accent.</div>
+              <div style={{ fontSize: 11, color: "rgba(210,224,246,0.72)" }}>Tap to toggle. Long-press for accent.</div>
             </div>
             <label style={{ color: "rgba(255,255,255,0.9)", fontSize: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 12 }}>
