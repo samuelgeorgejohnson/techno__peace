@@ -746,6 +746,10 @@ export default function SkyInstrument({
     stopControlEvent(e);
   }
 
+  function stopMixerPropagation(e: React.SyntheticEvent) {
+    e.stopPropagation();
+  }
+
   function updateChannelLevel(channelId: string, level: number) {
     setMixLevels((prev) => ({ ...prev, [channelId]: level }));
   }
@@ -987,9 +991,9 @@ export default function SkyInstrument({
       <a
         data-sky-control="true"
         href="/"
-        onPointerDown={stopMixerEvent}
-        onPointerUp={stopMixerEvent}
-        onClick={stopMixerEvent}
+        onPointerDown={stopMixerPropagation}
+        onPointerUp={stopMixerPropagation}
+        onClick={stopMixerPropagation}
         style={{
           position: "absolute",
           top: `max(10px, calc(${safeInsetTop} + 8px))`,
