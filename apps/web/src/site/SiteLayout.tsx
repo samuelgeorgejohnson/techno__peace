@@ -17,27 +17,16 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-const homeNavLinks = [
+const siteNavLinks = [
   { href: "/about", label: "About" },
-  { href: "/", label: "Mission" },
-  { href: "/essays", label: "Essays" },
-  { href: "/field-recordings", label: "Field Recordings" },
-  { href: "/about", label: "Contact" },
-];
-
-const worldNavLinks = [
-  { href: "/about", label: "About" },
-  { href: "/", label: "Mission" },
-  { href: "/essays", label: "Essays" },
-  { href: "/field-recordings", label: "Field Recordings" },
-  { href: "/about#contact", label: "Contact" },
-  { href: "/app/sky", label: "Enter Sky Mode" },
-  { href: "/", label: "Enter World" },
+  { href: "/projects", label: "Projects" },
+  { href: "/contact", label: "Contact" },
+  { href: "/app", label: "Enter Sky Mode" },
 ];
 
 export default function SiteLayout({ title, subtitle, description, children, isHomePage = false, showHeroActions = true }: SiteLayoutProps) {
   return (
-    <main className={`tp-site-home${isHomePage ? " tp-site-home--landing" : ""}`}>
+    <main className={`tp-site-home${isHomePage ? " tp-site-home--landing" : " tp-site-home--subpage"}`}>
       <section className="tp-site-hero-stage">
         <div className="tp-site-hero-bg" aria-hidden="true" />
         <header className="tp-site-nav-shell">
@@ -45,15 +34,11 @@ export default function SiteLayout({ title, subtitle, description, children, isH
             <img src="/assets/logo/technopeace-dove.svg" className="tp-site-logo" alt="" />
           </a>
           <nav className="tp-site-nav" aria-label="Primary">
-            {(isHomePage ? homeNavLinks : worldNavLinks).map((link) => (
+            {siteNavLinks.map((link) => (
               <NavLink key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
             ))}
           </nav>
-          {isHomePage ? (
-            <a className="tp-site-enter-pill" href="/app/sky">
-              Enter Sky Mode
-            </a>
-          ) : <span />}
+          <span />
         </header>
 
         <div className="tp-site-hero-content">
@@ -63,7 +48,7 @@ export default function SiteLayout({ title, subtitle, description, children, isH
           {showHeroActions ? (
             <div className="tp-site-actions">
               <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-              <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
+              <a className="tp-site-secondary" href="/about">Explore the World</a>
             </div>
           ) : null}
         </div>

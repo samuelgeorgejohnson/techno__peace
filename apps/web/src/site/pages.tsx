@@ -1,28 +1,5 @@
 import SiteLayout from "./SiteLayout";
 
-function OverviewCards() {
-  return (
-    <div className="tp-site-overview-grid">
-      <article className="tp-site-overview-card">
-        <h2>World</h2>
-        <p>Public essays, field notes, and a living archive of atmosphere.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Sky</h2>
-        <p>An interactive instrument tuned by time, cloud, sun, and moon.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Archive</h2>
-        <p>Recorded environments and sonic traces from specific places.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Contact</h2>
-        <p>Collaborators, context, and pathways into the work.</p>
-      </article>
-    </div>
-  );
-}
-
 export function SiteHomePage() {
   return (
     <SiteLayout
@@ -30,21 +7,46 @@ export function SiteHomePage() {
       title="TechnoPeace"
       subtitle="Calm systems for peace, weather, and attention."
       description="A cinematic world site and a gateway into Sky Mode, where live local conditions gently shape light, haze, and sound."
-    >
-      <OverviewCards />
-    </SiteLayout>
+    />
   );
 }
 
 export function AboutPage() {
   return (
     <SiteLayout
-      title="About / Contact"
-      description="Project story, collaborators, and contact pathways live here as dedicated world-page content."
+      title="About TechnoPeace"
+      description="About and mission: building calm systems for peace, weather, and attention through atmospheric media and instrument design."
       showHeroActions={false}
     >
       <section className="tp-site-page-content">
-        <p>This page is reserved for the project story, collaborator context, and contact details.</p>
+        <p>
+          TechnoPeace is an ongoing practice focused on peaceful interfaces, reflective environments, and tools that help people
+          sense place with more care.
+        </p>
+        <p>
+          Mission: create public-facing works where weather, light, and sound become gentle signals for attention rather than
+          noise—supporting calm, curiosity, and connection.
+        </p>
+      </section>
+    </SiteLayout>
+  );
+}
+
+export function ProjectsPage() {
+  return (
+    <SiteLayout
+      title="Projects"
+      description="A lightweight index of current public project areas."
+      showHeroActions={false}
+    >
+      <section className="tp-site-page-content">
+        <h2>Essays</h2>
+        <p>Writing, theory, and worldbuilding texts.</p>
+        <p><a className="tp-site-inline-link" href="/projects/essays">Open Essays</a></p>
+
+        <h2>Field Recordings</h2>
+        <p>Atmosphere captures, notes, and environmental studies.</p>
+        <p><a className="tp-site-inline-link" href="/projects/field-recordings">Open Field Recordings</a></p>
       </section>
     </SiteLayout>
   );
@@ -62,9 +64,23 @@ export function FieldRecordingsPage() {
 
 export function EssaysPage() {
   return (
-    <SiteLayout title="Essays / Manifesto" description="Writing, theory, and worldbuilding texts." showHeroActions={false}>
+    <SiteLayout title="Essays" description="Writing, theory, and worldbuilding texts." showHeroActions={false}>
       <section className="tp-site-page-content">
         <p>Essays and manifesto writing live here in a clean readable layout.</p>
+      </section>
+    </SiteLayout>
+  );
+}
+
+export function ContactPage() {
+  return (
+    <SiteLayout
+      title="Contact"
+      description="Contact and collaboration pathways for artistic, research, and educational work."
+      showHeroActions={false}
+    >
+      <section className="tp-site-page-content">
+        <p>For collaborations, commissions, workshops, or press, please reach out via the project contact channels.</p>
       </section>
     </SiteLayout>
   );
@@ -75,9 +91,10 @@ export function ChaosPlaceholderPage() {
     <SiteLayout
       title="Chaos Mode (Future)"
       description="Chaos Mode route is reserved for a future playable system while Sky Mode remains the active instrument."
+      showHeroActions={false}
     >
-      <section className="tp-site-actions">
-        <a className="tp-site-primary" href="/app/sky">Launch Sky Mode</a>
+      <section className="tp-site-page-content">
+        <p><a className="tp-site-inline-link" href="/app">Launch Sky Mode</a></p>
       </section>
     </SiteLayout>
   );

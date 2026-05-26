@@ -269,6 +269,21 @@ body {
   overflow: hidden;
 }
 
+.tp-site-home--subpage {
+  height: auto;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
+
+.tp-site-home--subpage .tp-site-hero-stage {
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.tp-site-home--subpage .tp-site-hero-content {
+  margin: clamp(8px, 3vh, 24px) auto 0;
+}
+
 .tp-site-hero-stage {
   position: relative;
   min-height: 0;
@@ -345,6 +360,10 @@ body {
   line-height: 1.6;
 }
 
+.tp-site-inline-link {
+  color: #f0f5ff;
+}
+
 @media (max-width: 900px) {
   .tp-site-nav-shell { grid-template-columns: 1fr; justify-items: center; }
   .tp-site-overview-grid { grid-template-columns: 1fr; }
@@ -376,6 +395,11 @@ body {
 
   .tp-site-home--landing .tp-site-hero-stage {
     justify-content: center;
+  }
+
+  .tp-site-home--subpage .tp-site-nav-shell {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 
