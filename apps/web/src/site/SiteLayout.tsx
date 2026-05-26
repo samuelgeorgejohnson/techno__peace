@@ -6,6 +6,7 @@ type SiteLayoutProps = {
   description: string;
   children?: ReactNode;
   isHomePage?: boolean;
+  showHeroActions?: boolean;
 };
 
 function NavLink({ href, label }: { href: string; label: string }) {
@@ -16,7 +17,25 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function SiteLayout({ title, subtitle, description, children, isHomePage = false }: SiteLayoutProps) {
+const homeNavLinks = [
+  { href: "/about", label: "About" },
+  { href: "/", label: "Mission" },
+  { href: "/essays", label: "Essays" },
+  { href: "/field-recordings", label: "Field Recordings" },
+  { href: "/about", label: "Contact" },
+];
+
+const worldNavLinks = [
+  { href: "/about", label: "About" },
+  { href: "/", label: "Mission" },
+  { href: "/essays", label: "Essays" },
+  { href: "/field-recordings", label: "Field Recordings" },
+  { href: "/about#contact", label: "Contact" },
+  { href: "/app/sky", label: "Enter Sky Mode" },
+  { href: "/", label: "Enter World" },
+];
+
+export default function SiteLayout({ title, subtitle, description, children, isHomePage = false, showHeroActions = true }: SiteLayoutProps) {
   return (
     <main className={`tp-site-home${isHomePage ? " tp-site-home--landing" : ""}`}>
       <section className="tp-site-hero-stage">
@@ -26,25 +45,27 @@ export default function SiteLayout({ title, subtitle, description, children, isH
             <img src="/assets/logo/technopeace-dove.svg" className="tp-site-logo" alt="" />
           </a>
           <nav className="tp-site-nav" aria-label="Primary">
-            <NavLink href="/about" label="About" />
-            <NavLink href="/" label="Mission" />
-            <NavLink href="/essays" label="Essays" />
-            <NavLink href="/field-recordings" label="Field Recordings" />
-            <NavLink href="/about" label="Contact" />
+            {(isHomePage ? homeNavLinks : worldNavLinks).map((link) => (
+              <NavLink key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
+            ))}
           </nav>
-          <a className="tp-site-enter-pill" href="/app/sky">
-            Enter Sky Mode
-          </a>
+          {isHomePage ? (
+            <a className="tp-site-enter-pill" href="/app/sky">
+              Enter Sky Mode
+            </a>
+          ) : <span />}
         </header>
 
         <div className="tp-site-hero-content">
           <h1>{title}</h1>
           {subtitle ? <p className="tp-site-subtitle">{subtitle}</p> : null}
           <p>{description}</p>
-          <div className="tp-site-actions">
-            <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-            <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
-          </div>
+          {showHeroActions ? (
+            <div className="tp-site-actions">
+              <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
+              <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
+            </div>
+          ) : null}
         </div>
       </section>
 

@@ -38,24 +38,34 @@ export function SiteHomePage() {
 
 export function AboutPage() {
   return (
-    <SiteLayout title="About / Contact" description="Placeholder for project story, collaborators, and contact pathways.">
-      <OverviewCards />
+    <SiteLayout
+      title="About / Contact"
+      description="Project story, collaborators, and contact pathways live here as dedicated world-page content."
+      showHeroActions={false}
+    >
+      <section className="tp-site-page-content">
+        <p>This page is reserved for the project story, collaborator context, and contact details.</p>
+      </section>
     </SiteLayout>
   );
 }
 
 export function FieldRecordingsPage() {
   return (
-    <SiteLayout title="Field Recordings" description="Placeholder archive route for future recordings and releases.">
-      <OverviewCards />
+    <SiteLayout title="Field Recordings" description="Archive route for recordings and releases." showHeroActions={false}>
+      <section className="tp-site-page-content">
+        <p>Field recordings and atmosphere captures are presented here with room for full entries.</p>
+      </section>
     </SiteLayout>
   );
 }
 
 export function EssaysPage() {
   return (
-    <SiteLayout title="Essays / Manifesto" description="Placeholder route for writing, theory, and worldbuilding texts.">
-      <OverviewCards />
+    <SiteLayout title="Essays / Manifesto" description="Writing, theory, and worldbuilding texts." showHeroActions={false}>
+      <section className="tp-site-page-content">
+        <p>Essays and manifesto writing live here in a clean readable layout.</p>
+      </section>
     </SiteLayout>
   );
 }
