@@ -282,8 +282,66 @@ body {
 .tp-site-hero-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(rgba(10, 14, 26, 0.45), rgba(10, 14, 26, 0.58)), url('/assets/sky/sky_base.jpg') center/cover no-repeat;
-  filter: saturate(1.1);
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.tp-site-sky-gradient,
+.tp-site-sky-diffusion,
+.tp-site-sky-clouds,
+.tp-site-sky-fog,
+.tp-site-sky-rain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tp-site-sky-gradient {
+  background: linear-gradient(180deg, var(--tp-sky-top, #081026) 0%, var(--tp-sky-mid, #2f4768) 52%, var(--tp-sky-horizon, #897ba5) 100%);
+  filter: brightness(var(--tp-sky-brightness, 1));
+}
+
+.tp-site-sky-diffusion {
+  background:
+    radial-gradient(70% 60% at 22% 30%, rgba(255, 220, 170, 0.14), transparent 70%),
+    radial-gradient(90% 80% at 74% 40%, rgba(150, 210, 255, 0.16), transparent 66%);
+  animation: tpSlowDrift 48s ease-in-out infinite alternate;
+}
+
+.tp-site-sky-clouds {
+  opacity: var(--tp-cloud-opacity, 0.24);
+  background:
+    radial-gradient(100% 40% at 14% 38%, rgba(240, 246, 255, 0.3), transparent 72%),
+    radial-gradient(95% 35% at 66% 44%, rgba(224, 236, 252, 0.24), transparent 70%),
+    radial-gradient(120% 50% at 44% 72%, rgba(205, 220, 240, 0.2), transparent 75%);
+  transform: translateX(-5%);
+  animation: tpCloudDrift var(--tp-cloud-speed, 26s) linear infinite;
+}
+
+.tp-site-sky-fog {
+  opacity: var(--tp-fog-opacity, 0.1);
+  background: linear-gradient(180deg, transparent 30%, rgba(244, 238, 224, 0.22) 75%, rgba(238, 231, 215, 0.3) 100%);
+}
+
+.tp-site-sky-rain {
+  opacity: var(--tp-rain-opacity, 0);
+  background-image: repeating-linear-gradient(102deg, rgba(210, 230, 255, 0.22) 0 1px, transparent 1px 11px);
+  animation: tpRainSlide 1.2s linear infinite;
+}
+
+@keyframes tpCloudDrift {
+  from { transform: translateX(-6%); }
+  to { transform: translateX(6%); }
+}
+
+@keyframes tpSlowDrift {
+  from { transform: translate3d(-1.2%, -1%, 0) scale(1.01); }
+  to { transform: translate3d(1.3%, 1%, 0) scale(1.04); }
+}
+
+@keyframes tpRainSlide {
+  from { transform: translateY(-14px); }
+  to { transform: translateY(14px); }
 }
 
 .tp-site-nav-shell,
