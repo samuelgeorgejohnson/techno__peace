@@ -340,6 +340,24 @@ body {
   .tp-site-nav { width: 100%; display: grid; grid-template-columns: repeat(3, max-content); justify-content: center; }
   .tp-site-nav-link { min-height: 35px; padding: 0 10px; font-size: 0.69rem; display: inline-flex; align-items: center; }
   .tp-site-enter-pill { font-size: 0.72rem; padding: 7px 12px; }
+
+  .tp-site-home--landing .tp-site-lower {
+    display: none;
+  }
+
+  .tp-site-home--landing .tp-site-nav {
+    display: none;
+  }
+
+  .tp-site-home--landing .tp-site-nav-shell {
+    grid-template-columns: auto;
+    justify-items: center;
+    gap: 10px;
+  }
+
+  .tp-site-home--landing .tp-site-hero-stage {
+    justify-content: center;
+  }
 }
 
 @media (max-width: 420px) {

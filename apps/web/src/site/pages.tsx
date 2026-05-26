@@ -26,6 +26,7 @@ function OverviewCards() {
 export function SiteHomePage() {
   return (
     <SiteLayout
+      isHomePage
       title="TechnoPeace"
       subtitle="Calm systems for peace, weather, and attention."
       description="A cinematic world site and a gateway into Sky Mode, where live local conditions gently shape light, haze, and sound."

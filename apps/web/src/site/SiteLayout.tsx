@@ -5,6 +5,7 @@ type SiteLayoutProps = {
   subtitle?: string;
   description: string;
   children?: ReactNode;
+  isHomePage?: boolean;
 };
 
 function NavLink({ href, label }: { href: string; label: string }) {
@@ -15,9 +16,9 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function SiteLayout({ title, subtitle, description, children }: SiteLayoutProps) {
+export default function SiteLayout({ title, subtitle, description, children, isHomePage = false }: SiteLayoutProps) {
   return (
-    <main className="tp-site-home">
+    <main className={`tp-site-home${isHomePage ? " tp-site-home--landing" : ""}`}>
       <section className="tp-site-hero-stage">
         <div className="tp-site-hero-bg" aria-hidden="true" />
         <header className="tp-site-nav-shell">
