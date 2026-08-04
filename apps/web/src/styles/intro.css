@@ -578,3 +578,58 @@ body {
     border-radius: 18px;
   }
 }
+
+/* Final mobile hero fit */
+
+.tp-site-hero-content {
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.tp-site-hero-content h1 {
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .tp-site-hero-content {
+    padding: 28px 18px;
+  }
+
+  .tp-site-hero-content h1 {
+    font-size: clamp(2.55rem, 12.5vw, 4rem);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 420px) {
+  .tp-site-hero-content h1 {
+    font-size: clamp(2.35rem, 12vw, 3.25rem);
+    letter-spacing: -0.045em;
+  }
+
+  .tp-site-hero-content {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .tp-site-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tp-site-primary,
+  .tp-site-secondary {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+}
