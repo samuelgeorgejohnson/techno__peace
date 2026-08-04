@@ -43,6 +43,28 @@ export function AboutPage() {
   );
 }
 
+export function MissionPage() {
+  return (
+    <SiteLayout
+      title="Mission"
+      description="TechnoPeace explores the relationship between people, place, weather, sound, and technology through instruments, field recordings, research, and art."
+    >
+      <OverviewCards />
+    </SiteLayout>
+  );
+}
+
+export function ContactPage() {
+  return (
+    <SiteLayout
+      title="Contact"
+      description="Get in touch regarding collaborations, performances, research, education, or field recording projects."
+    >
+      <OverviewCards />
+    </SiteLayout>
+  );
+}
+
 export function FieldRecordingsPage() {
   return (
     <SiteLayout title="Field Recordings" description="Placeholder archive route for future recordings and releases.">
