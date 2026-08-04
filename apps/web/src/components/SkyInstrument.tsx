@@ -205,7 +205,7 @@ export default function SkyInstrument({
 
   const [pt, setPt] = useState<Pt>({ x: 0.5, y: 0.5, pressure: 0 });
   const [hasUnlockedAudio, setHasUnlockedAudio] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const activePointerIdsRef = useRef<Set<number>>(new Set());
   const [mixerOpen, setMixerOpen] = useState(false);
   const [activePageId, setActivePageId] = useState(initialMixerPages[0].id);
   const [mixLevels, setMixLevels] = useState<Record<string, number>>(INITIAL_MIX_LEVELS);
@@ -233,7 +233,8 @@ export default function SkyInstrument({
     [activePageId],
   );
   const rawWind = clamp01(weather.windMps / 20);
-  const rawRain = clamp01((weather.rainMm + weather.showersMm) / 5);
+  const currentRainEvidenceMm = Math.max(weather.rainMm || 0, weather.showersMm || 0, weather.precipitationMm || 0);
+  const rawRain = clamp01(currentRainEvidenceMm / 5);
   const rawHumidity = clamp01(weather.humidityPct / 100);
   const windMix = (mixLevels.wind ?? 100) / 100;
   const rainMix = (mixLevels.rain ?? 100) / 100;
@@ -368,12 +369,21 @@ export default function SkyInstrument({
       },
       {
         category: "Weather values",
-        label: "Rain",
-        raw: `${fmtNumber(weather.rainMm + weather.showersMm, 2)} mm`,
+        label: "Current rain evidence",
+        raw: `rain ${fmtNumber(weather.rainMm, 2)} / showers ${fmtNumber(weather.showersMm, 2)} / precip ${fmtNumber(weather.precipitationMm, 2)} mm` ,
         userControl: fmtPercent(rainMix),
-        effective: `${fmtNumber(effectiveRain * 5, 2)} mm`,
+        effective: `${fmtNumber(effectiveRain * 5, 2)} mm → gain ${fmtPercent(effectiveRain)}`,
         source: weatherSourceStatus,
-        note: "rain + showers scaled by mixer rain",
+        note: "max current rain/showers/precipitation only; daily rain does not create audio",
+      },
+      {
+        category: "Weather values",
+        label: "Daily rain accumulation",
+        raw: `${fmtNumber(weather.dailyRainMm, 2)} mm`,
+        userControl: "not mixed",
+        effective: "diagnostic only",
+        source: weatherSourceStatus,
+        note: "kept separate from current-rain audio evidence",
       },
       {
         category: "Weather values",
@@ -473,7 +483,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, sunRawLive, sunMix, weather.dailyRainMm, weather.humidityPct, weather.isDay, weather.precipitationMm, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -575,6 +585,19 @@ export default function SkyInstrument({
   );
 
   useEffect(() => {
+    return () => {
+      activePointerIdsRef.current.clear();
+      setActiveTouches({});
+    };
+  }, []);
+
+  useEffect(() => {
+    activePointerIdsRef.current.clear();
+    setActiveTouches({});
+    if (performanceMode !== "sky") setHeldSkyVoices([]);
+  }, [performanceMode]);
+
+  useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(max-width: 768px)");
     const applyMode = (matches: boolean) => {
@@ -646,7 +669,7 @@ export default function SkyInstrument({
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
 
     const nextPt = { x, y, pressure };
-    setIsDragging(true);
+    activePointerIdsRef.current.add(e.pointerId);
     setPt(nextPt);
     if (performanceMode === "sky") {
       const voiceId = nextVoiceIdRef.current++;
@@ -657,7 +680,7 @@ export default function SkyInstrument({
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio || !isDragging || !isPerformancePointerTarget(e.target)) return;
+    if (mixerOpen || !hasUnlockedAudio || !activePointerIdsRef.current.has(e.pointerId) || !isPerformancePointerTarget(e.target)) return;
     e.preventDefault();
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
@@ -674,8 +697,8 @@ export default function SkyInstrument({
     if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
     e.preventDefault();
     const { x, y } = getXY(e);
-    setIsDragging(Object.keys(activeTouches).length > 1);
-    setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
+    activePointerIdsRef.current.delete(e.pointerId);
+    setPt((p) => ({ ...p, x, y, pressure: activePointerIdsRef.current.size ? p.pressure : dronePressure }));
     if (performanceMode === "sky") {
       setActiveTouches((prev) => {
         const next = { ...prev };
@@ -692,9 +715,9 @@ export default function SkyInstrument({
     update(audioParams({ x, y, pressure: dronePressure }));
   }
 
-  function onPointerLeave() {
+  function onPointerLeave(e?: React.PointerEvent) {
     if (!hasUnlockedAudio) return;
-    setIsDragging(false);
+    if (e) activePointerIdsRef.current.delete(e.pointerId);
     setPt((p) => ({ ...p, pressure: dronePressure }));
     if (performanceMode === "sky" && !skyHold) {
       setActiveTouches({});
@@ -757,7 +780,6 @@ export default function SkyInstrument({
   function setMonitorLayer(layer: keyof AudioMonitorState, nextValue: boolean) {
     setAudioMonitor((prev) => {
       if (prev[layer] === nextValue) return prev;
-      console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextValue ? "on" : "off"}`);
       return { ...prev, [layer]: nextValue };
     });
   }
@@ -768,7 +790,6 @@ export default function SkyInstrument({
       (Object.keys(nextState) as Array<keyof AudioMonitorState>).forEach((layer) => {
         if (prev[layer] !== nextState[layer]) {
           changed = true;
-          console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextState[layer] ? "on" : "off"}`);
         }
       });
       return changed ? nextState : prev;
