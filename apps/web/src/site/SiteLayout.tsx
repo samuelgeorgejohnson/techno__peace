@@ -5,6 +5,8 @@ type SiteLayoutProps = {
   subtitle?: string;
   description: string;
   children?: ReactNode;
+  isHomePage?: boolean;
+  showHeroActions?: boolean;
 };
 
 function NavLink({ href, label }: { href: string; label: string }) {
@@ -15,9 +17,16 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function SiteLayout({ title, subtitle, description, children }: SiteLayoutProps) {
+const siteNavLinks = [
+  { href: "/about", label: "About" },
+  { href: "/projects", label: "Projects" },
+  { href: "/contact", label: "Contact" },
+  { href: "/app", label: "Enter Sky Mode" },
+];
+
+export default function SiteLayout({ title, subtitle, description, children, isHomePage = false, showHeroActions = true }: SiteLayoutProps) {
   return (
-    <main className="tp-site-home">
+    <main className={`tp-site-home${isHomePage ? " tp-site-home--landing" : " tp-site-home--subpage"}`}>
       <section className="tp-site-hero-stage">
         <div className="tp-site-hero-bg" aria-hidden="true" />
         <header className="tp-site-nav-shell">
@@ -25,25 +34,23 @@ export default function SiteLayout({ title, subtitle, description, children }: S
             <img src="/assets/logo/technopeace-dove.svg" className="tp-site-logo" alt="" />
           </a>
           <nav className="tp-site-nav" aria-label="Primary">
-            <NavLink href="/about" label="About" />
-            <NavLink href="/" label="Mission" />
-            <NavLink href="/essays" label="Essays" />
-            <NavLink href="/field-recordings" label="Field Recordings" />
-            <NavLink href="/about" label="Contact" />
+            {siteNavLinks.map((link) => (
+              <NavLink key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
+            ))}
           </nav>
-          <a className="tp-site-enter-pill" href="/app/sky">
-            Enter Sky Mode
-          </a>
+          <span />
         </header>
 
         <div className="tp-site-hero-content">
           <h1>{title}</h1>
           {subtitle ? <p className="tp-site-subtitle">{subtitle}</p> : null}
           <p>{description}</p>
-          <div className="tp-site-actions">
-            <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-            <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
-          </div>
+          {showHeroActions ? (
+            <div className="tp-site-actions">
+              <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
+              <a className="tp-site-secondary" href="/about">Explore the World</a>
+            </div>
+          ) : null}
         </div>
       </section>
 

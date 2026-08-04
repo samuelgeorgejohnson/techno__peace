@@ -1,5 +1,5 @@
 import InstrumentApp from "../instrument/InstrumentApp";
-import { AboutPage, ChaosPlaceholderPage, EssaysPage, FieldRecordingsPage, SiteHomePage } from "../site/pages";
+import { AboutPage, ChaosPlaceholderPage, ContactPage, EssaysPage, FieldRecordingsPage, ProjectsPage, SiteHomePage } from "../site/pages";
 
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";
 
@@ -12,8 +12,10 @@ export function resolveRoute(pathname: string) {
 
   if (path === "/app/chaos") return <ChaosPlaceholderPage />;
   if (path === "/about") return <AboutPage />;
-  if (path === "/field-recordings") return <FieldRecordingsPage />;
-  if (path === "/essays") return <EssaysPage />;
+  if (path === "/contact") return <ContactPage />;
+  if (path === "/projects") return <ProjectsPage />;
+  if (path === "/projects/field-recordings" || path === "/field-recordings") return <FieldRecordingsPage />;
+  if (path === "/projects/essays" || path === "/essays") return <EssaysPage />;
 
   return <SiteHomePage />;
 }
