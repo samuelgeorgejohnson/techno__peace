@@ -349,3 +349,232 @@ body {
   .tp-site-actions { gap: 8px; }
   .tp-site-primary, .tp-site-secondary { min-width: 132px; min-height: 38px; padding: 9px 12px; font-size: 0.77rem; }
 }
+
+/* -------------------------------------------------
+   TechnoPeace site readability + mobile layout fix
+-------------------------------------------------- */
+
+.tp-site-home {
+  min-height: 100dvh;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #050914;
+}
+
+.tp-site-hero-stage {
+  position: relative;
+  min-height: 100svh;
+  height: auto;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    clamp(18px, 4vw, 40px)
+    48px;
+  justify-content: flex-start;
+  gap: clamp(42px, 8vh, 88px);
+  overflow: hidden;
+}
+
+.tp-site-hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(3, 7, 18, 0.62) 0%,
+      rgba(4, 9, 22, 0.76) 50%,
+      rgba(3, 7, 17, 0.96) 100%
+    ),
+    url("/assets/sky/sky_base.jpg") center / cover no-repeat;
+  filter: saturate(0.9) brightness(0.72);
+}
+
+.tp-site-nav-shell {
+  position: relative;
+  z-index: 3;
+}
+
+.tp-site-hero-content {
+  position: relative;
+  z-index: 2;
+  width: min(760px, 100%);
+  margin: auto auto 0;
+  padding: clamp(24px, 5vw, 44px);
+  border: 1px solid rgba(214, 229, 255, 0.16);
+  border-radius: 28px;
+  background: rgba(4, 9, 22, 0.58);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.tp-site-hero-content h1 {
+  color: #f6f8ff;
+  text-shadow:
+    0 2px 18px rgba(0, 0, 0, 0.9),
+    0 0 30px rgba(164, 196, 255, 0.16);
+}
+
+.tp-site-subtitle {
+  color: #eef4ff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9);
+}
+
+.tp-site-hero-content > p {
+  color: rgba(232, 240, 252, 0.88);
+  line-height: 1.55;
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tp-site-actions {
+  position: relative;
+  z-index: 3;
+}
+
+.tp-site-primary,
+.tp-site-secondary,
+.tp-site-nav-link,
+.tp-site-enter-pill {
+  position: relative;
+  z-index: 3;
+  cursor: pointer;
+}
+
+.tp-site-primary {
+  background: #f2f6ff;
+  color: #10182a;
+  font-weight: 700;
+}
+
+.tp-site-secondary,
+.tp-site-nav-link,
+.tp-site-enter-pill {
+  background: rgba(9, 18, 36, 0.72);
+  color: #f2f6ff;
+  border-color: rgba(215, 231, 255, 0.34);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.tp-site-lower {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: clamp(22px, 4vw, 46px);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(3, 7, 17, 0.98),
+      rgba(5, 8, 18, 1)
+    );
+}
+
+.tp-site-overview-grid {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+}
+
+.tp-site-overview-card {
+  background: rgba(10, 17, 31, 0.94);
+  border-color: rgba(202, 221, 248, 0.2);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+.tp-site-overview-card h2 {
+  color: #f5f8ff;
+}
+
+.tp-site-overview-card p {
+  color: rgba(222, 233, 248, 0.86);
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+  .tp-site-hero-stage {
+    min-height: auto;
+    padding:
+      max(26px, env(safe-area-inset-top))
+      18px
+      42px;
+    gap: 34px;
+  }
+
+  .tp-site-nav-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .tp-site-logo {
+    width: 58px;
+  }
+
+  .tp-site-nav {
+    display: flex;
+    width: min(100%, 390px);
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .tp-site-nav-link {
+    min-height: 42px;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+  }
+
+  .tp-site-enter-pill {
+    min-height: 44px;
+    padding: 11px 19px;
+    font-size: 0.88rem;
+  }
+
+  .tp-site-hero-content {
+    margin: 0 auto;
+    padding: 26px 20px;
+    border-radius: 22px;
+  }
+
+  .tp-site-hero-content h1 {
+    font-size: clamp(2.5rem, 14vw, 4.2rem);
+    line-height: 0.98;
+  }
+
+  .tp-site-subtitle {
+    font-size: 1.05rem;
+    line-height: 1.35;
+  }
+
+  .tp-site-hero-content > p {
+    font-size: 0.94rem;
+  }
+
+  .tp-site-actions {
+    margin-top: 20px;
+  }
+
+  .tp-site-primary,
+  .tp-site-secondary {
+    min-height: 44px;
+    padding: 11px 17px;
+  }
+
+  .tp-site-lower {
+    padding: 24px 18px 40px;
+  }
+
+  .tp-site-overview-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .tp-site-overview-card {
+    padding: 20px;
+    border-radius: 18px;
+  }
+}
