@@ -47,6 +47,8 @@ export function useAudioEngine() {
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airNoiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airToneRef = useRef<OscillatorNode | null>(null);
+  const skyVoiceBusRef = useRef<GainNode | null>(null);
+  const skyVoiceRefs = useRef<Map<number, { osc: OscillatorNode; gain: GainNode; filter: BiquadFilterNode }>>(new Map());
 
   const masterGainRef = useRef<GainNode | null>(null);
   const baseDroneGainRef = useRef<GainNode | null>(null);
@@ -134,6 +136,11 @@ export function useAudioEngine() {
     noiseSrcRef.current = null;
     airNoiseSrcRef.current = null;
     airToneRef.current = null;
+    skyVoiceRefs.current.forEach((voice) => {
+      try { voice.osc.stop(); } catch {}
+    });
+    skyVoiceRefs.current.clear();
+    skyVoiceBusRef.current = null;
 
     masterGainRef.current = null;
     baseDroneGainRef.current = null;
@@ -263,6 +270,9 @@ export function useAudioEngine() {
     const mainSignalGain = ctx.createGain();
     mainSignalGain.gain.value = 1;
     mainSignalGainRef.current = mainSignalGain;
+    const skyVoiceBus = ctx.createGain();
+    skyVoiceBus.gain.value = 0.72;
+    skyVoiceBusRef.current = skyVoiceBus;
     const mainSignalDryGain = ctx.createGain();
     mainSignalDryGain.gain.value = 1;
     mainSignalDryGainRef.current = mainSignalDryGain;
@@ -496,6 +506,7 @@ export function useAudioEngine() {
     infraFilter.connect(infraSaturation);
     infraSaturation.connect(mainSignalGain);
     baseFilter.connect(mainSignalGain);
+    skyVoiceBus.connect(mainSignalGain);
     mainSignalGain.connect(mainSignalPostFilter);
     mainSignalPostFilter.connect(mainSignalSaturation);
     mainSignalSaturation.connect(mainSignalDryGain);
@@ -583,8 +594,9 @@ export function useAudioEngine() {
     const pressure = clamp(p.pressure);
     const windNorm = clamp(p.windMps / 20);
     const humidityNorm = clamp(p.humidityPct / 100);
-    const rainNorm = clamp((p.rainMm + p.showersMm) / 5);
-    const precipNorm = clamp((p.rainMm + p.showersMm + p.precipitationMm) / 8);
+    const currentRainMm = Math.max(p.rainMm || 0, p.showersMm || 0, p.precipitationMm || 0);
+    const rainNorm = clamp(currentRainMm / 5);
+    const precipNorm = clamp(currentRainMm / 8);
     const sunNorm = clamp((p.sunAltitudeDeg + 90) / 180);
     const moonNorm = clamp(p.moonPhase);
     const birdsLevel = clamp(p.birdsLevel ?? 1, 0, 2);
@@ -605,17 +617,58 @@ export function useAudioEngine() {
     let rootHz = pitchHz;
     let fifthHz = pitchHz * 1.5;
     let octaveHz = pitchHz * 2;
-    const voices = p.skyVoices ?? [];
+    const voices = (p.skyVoices ?? []).slice(0, 4);
+    // Sky played voices are place-tonic scale degrees across two octaves; Y changes each voice filter, not its pitch.
+    const skyScaleSteps = [0, 2, 5, 7, 9, 12, 14, 17];
+    const skyVoiceHz = (vx: number) => {
+      const idx = Math.min(skyScaleSteps.length - 1, Math.floor(clamp(vx) * skyScaleSteps.length));
+      const lowerOctave = vx < 0.18 ? -12 : 0;
+      return placeBaseHz * Math.pow(2, (skyScaleSteps[idx] + lowerOctave) / 12);
+    };
     if ((p.performanceMode ?? "sky") === "sky" && voices.length > 1) {
-      const steps = [0, 2, 4, 7, 9];
-      const voiceHz = (vx: number) => {
-        const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
-        const octave = Math.floor(clamp(vx) * 2);
-        return placeBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
-      };
-      rootHz = voiceHz(voices[0]?.x ?? 0.5);
-      fifthHz = voiceHz(voices[1]?.x ?? voices[0]?.x ?? 0.5);
-      octaveHz = voiceHz(voices[2]?.x ?? voices[voices.length - 1]?.x ?? 0.5);
+      rootHz = skyVoiceHz(voices[0]?.x ?? 0.5);
+      fifthHz = skyVoiceHz(voices[1]?.x ?? voices[0]?.x ?? 0.5);
+      octaveHz = skyVoiceHz(voices[2]?.x ?? voices[voices.length - 1]?.x ?? 0.5);
+    }
+
+
+    if (skyVoiceBusRef.current) {
+      const wanted = new Set<number>();
+      voices.forEach((voice, index) => {
+        const id = voice.voiceId ?? index + 1;
+        wanted.add(id);
+        let node = skyVoiceRefs.current.get(id);
+        if (!node) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const filter = ctx.createBiquadFilter();
+          osc.type = "triangle";
+          filter.type = "lowpass";
+          gain.gain.setValueAtTime(0.0001, now);
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(skyVoiceBusRef.current!);
+          osc.start(now);
+          node = { osc, gain, filter };
+          skyVoiceRefs.current.set(id, node);
+        }
+        node.osc.frequency.setTargetAtTime(skyVoiceHz(voice.x), now, 0.035);
+        node.filter.frequency.setTargetAtTime(clamp(420 + Math.pow(1 - clamp(voice.y), 2) * 5200, 320, 6200), now, 0.06);
+        node.gain.gain.setTargetAtTime(clamp(0.035 + clamp(voice.pressure) * 0.075, 0.02, 0.12), now, 0.025);
+      });
+      skyVoiceRefs.current.forEach((node, id) => {
+        if (wanted.has(id)) return;
+        node.gain.gain.setTargetAtTime(0.0001, now, 0.08);
+        window.setTimeout(() => {
+          const current = skyVoiceRefs.current.get(id);
+          if (current !== node) return;
+          try { node.osc.stop(); } catch {}
+          node.osc.disconnect();
+          node.filter.disconnect();
+          node.gain.disconnect();
+          skyVoiceRefs.current.delete(id);
+        }, 450);
+      });
     }
 
     const brightnessCutoff = 300 + Math.pow(1 - y, 2) * 5000;
@@ -629,7 +682,7 @@ export function useAudioEngine() {
     const highCloud = clamp((p.cloudCover - 0.7) / 0.3);
     const weatherMix = clamp((windNorm + humidityNorm + rainNorm + p.cloudCover * 0.7) / 3.7, 0, 1.8);
     const windLayerLevel = clamp((0.008 + 0.07 * windNorm) * (0.65 + 0.35 * (1 - humidityNorm)), 0, 0.12);
-    const rainLayerLevel = clamp((0.001 + 0.05 * rainNorm) * (1 - 0.1 * humidityNorm), 0, 0.05);
+    const rainLayerLevel = rainNorm > 0 ? clamp((0.018 + 0.12 * rainNorm) * (1 - 0.08 * humidityNorm), 0, 0.16) : 0;
     const weatherFilterHz = clamp(260 + 460 * windNorm + 240 * (1 - y), 180, 1200);
 
     const manMadeAir = p.air;
@@ -705,13 +758,14 @@ export function useAudioEngine() {
     const chaosTempoBpm = clamp(p.chaosTempoBpm ?? 100, 60, 160);
     const chaosStepSeconds = 60 / chaosTempoBpm / 4;
     const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
-    const chaosBassRootHz = placeBaseHz / 2;
-    const chaosBassSubHz = placeBaseHz / 4;
-    const chaosBassHz = clamp(chaosBassRootHz, 32, 120);
+    const chaosBassRootHz = clamp(placeBaseHz / 2, 36, 120);
+    const chaosBassSubHz = clamp(placeBaseHz / 4, 24, 64);
+    const chaosKickEndHz = clamp(placeBaseHz / 4, 32, 58);
+    const chaosBassHz = chaosBassRootHz;
     const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
     const chaosDrive = clamp(0.2 + pressure * 0.8, 0.2, 1);
 
-    if (rainNorm > 0.02 && Math.random() < rainNorm * 0.35) {
+    if (rainNorm > 0.02 && Math.random() < 0.08 + rainNorm * 0.55) {
       const click = ctx.createOscillator();
       const clickGain = ctx.createGain();
       click.type = "triangle";
@@ -720,7 +774,7 @@ export function useAudioEngine() {
       click.connect(clickGain);
       clickGain.connect(weatherFilterRef.current!);
       clickGain.gain.setValueAtTime(0.0001, now);
-      clickGain.gain.exponentialRampToValueAtTime(0.012 + 0.025 * rainNorm, now + 0.01);
+      clickGain.gain.exponentialRampToValueAtTime(0.018 + 0.04 * rainNorm, now + 0.01);
       clickGain.gain.exponentialRampToValueAtTime(0.0001, now + (0.08 + 0.1 * humidityNorm));
       click.start(now);
       click.stop(now + 0.2);
@@ -744,7 +798,7 @@ export function useAudioEngine() {
         chirpGain.connect(daylifeFilterRef.current);
         chirp.start(now);
         chirp.stop(now + dur + 0.02);
-        console.log("[audio] bird event", { birdsLevel, birdActivity, startFreq, endFreq, dur, amp });
+        
       }
       nextDaylifeEventRef.current = now + (0.16 + (1 - clamp(birdActivity / 2)) * 0.7) * (0.8 + Math.random() * 0.6);
     }
@@ -770,7 +824,7 @@ export function useAudioEngine() {
             part.start(strikeTime);
             part.stop(strikeTime + decay * (0.95 + idx * 0.25));
           });
-          console.log("[audio] chime event", { windMps: p.windMps, chimeActivity: chimeActivityRef.current, base, decay, amp });
+          
         };
 
         strike(0, 1);
@@ -801,7 +855,7 @@ export function useAudioEngine() {
         const passPan = clamp((Math.random() * 2 - 1) * (0.4 + 0.5 * airProximity), -0.95, 0.95);
         airPannerRef.current.pan.setValueAtTime(-passPan, now);
         airPannerRef.current.pan.linearRampToValueAtTime(passPan, now + dur);
-        console.log("[audio] air pass event", { airMix, airDensity, airProximity, airMotion, startFreq, endFreq, dur, amp });
+        
       }
       nextAirPassEventRef.current = now + (4 + (1 - airProximity) * 4) * (0.85 + Math.random() * 0.5);
     }
@@ -823,7 +877,7 @@ export function useAudioEngine() {
         blipGain.connect(trafficFilterRef.current);
         blip.start(now);
         blip.stop(now + dur + 0.03);
-        console.log("[audio] traffic event", { trafficDensity, flow, delay, pulseRate, trafficJitter, hz, amp, isChaosMode, trafficReliable });
+        
       }
       nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
     }
@@ -848,10 +902,10 @@ export function useAudioEngine() {
           const kickGain = ctx.createGain();
           const accent = laneAccent("kick") ? 1.3 : 1;
           kick.type = pressure > 0.6 ? "triangle" : "sine";
-          kick.frequency.setValueAtTime(chaosBassRootHz * 2.1, stepTime);
-          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassSubHz * 1.15), stepTime + 0.11);
+          kick.frequency.setValueAtTime(chaosKickEndHz * 3.2, stepTime);
+          kick.frequency.exponentialRampToValueAtTime(chaosKickEndHz, stepTime + 0.12);
           kickGain.gain.setValueAtTime(0.0001, stepTime);
-          kickGain.gain.exponentialRampToValueAtTime((0.08 + 0.08 * chaosDrive) * accent, stepTime + 0.01);
+          kickGain.gain.exponentialRampToValueAtTime((0.11 + 0.08 * chaosDrive) * accent, stepTime + 0.008);
           kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.16);
           kick.connect(kickGain);
           kickGain.connect(chaosKickGainRef.current);
@@ -873,12 +927,12 @@ export function useAudioEngine() {
           bassFilter.frequency.setValueAtTime(clamp(120 + (1 - y) * 140, 90, 260), stepTime);
           bassFilter.Q.setValueAtTime(0.72, stepTime);
           bassGain.gain.setValueAtTime(0.0001, stepTime);
-          bassGain.gain.exponentialRampToValueAtTime((0.065 + 0.055 * chaosDrive) * accent, stepTime + 0.02);
+          bassGain.gain.exponentialRampToValueAtTime((0.085 + 0.065 * chaosDrive) * accent, stepTime + 0.02);
           bassGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + (0.28 + 0.15 * (1 - y)));
           bass.connect(bassFilter);
           bassSub.connect(bassFilter);
           bassFilter.connect(bassGain);
-          bassGain.connect(chaosKickGainRef.current);
+          bassGain.connect(chaosGainRef.current!);
           bass.start(stepTime);
           bassSub.start(stepTime);
           bass.stop(stepTime + 0.52);
@@ -895,10 +949,10 @@ export function useAudioEngine() {
           const hatFilter = ctx.createBiquadFilter();
           const accent = laneAccent("hat") ? 1.25 : 1;
           hatFilter.type = "bandpass";
-          hatFilter.frequency.setValueAtTime(4800 + windNorm * 700 - humidityNorm * 300, stepTime);
+          hatFilter.frequency.setValueAtTime(6200 + windNorm * 900 - humidityNorm * 250, stepTime);
           hatFilter.Q.setValueAtTime(0.9, stepTime);
           hatGain.gain.setValueAtTime(0.0001, stepTime);
-          hatGain.gain.exponentialRampToValueAtTime((0.02 + 0.02 * pressure + 0.012 * windNorm) * accent, stepTime + 0.003);
+          hatGain.gain.exponentialRampToValueAtTime((0.045 + 0.025 * pressure + 0.018 * windNorm) * accent, stepTime + 0.003);
           hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.05);
           hatNoise.connect(hatFilter);
           hatFilter.connect(hatGain);
@@ -908,9 +962,9 @@ export function useAudioEngine() {
 
         if (chaosDuckGainRef.current && isKickStep && p.pulseLock) {
           chaosDuckGainRef.current.gain.cancelScheduledValues(stepTime);
-          const pulseDepth = clamp(0.08 + pressure * 0.08, 0.06, 0.17);
-          chaosDuckGainRef.current.gain.setValueAtTime(1 - pulseDepth, stepTime);
-          chaosDuckGainRef.current.gain.linearRampToValueAtTime(1, stepTime + 0.18);
+          const pulseDepth = clamp(0.06 + pressure * 0.06, 0.05, 0.12);
+          baseDroneGainRef.current?.gain.setValueAtTime(Math.max(0.72, 1 - pulseDepth), stepTime);
+          baseDroneGainRef.current?.gain.linearRampToValueAtTime(1, stepTime + 0.22);
         }
 
         chaosStepRef.current = (chaosStepRef.current + 1) % laneSteps;
@@ -1001,7 +1055,7 @@ export function useAudioEngine() {
     mainSignalShimmerDelayRef.current?.delayTime.setTargetAtTime(clamp(0.14 + moonExposure * 0.055 + airInfluence * 0.02, 0.14, 0.3), now, 0.24);
     mainSignalShimmerGainRef.current?.gain.setTargetAtTime(clamp(0.008 + starExposure * 0.035 + moonExposure * 0.03, 0.008, 0.095), now, 0.26);
     mainSignalReverbGainRef.current?.gain.setTargetAtTime(clamp(0.012 + rainInfluence * 0.06 + humidityNorm * 0.055 + fieldDensity * 0.015, 0.01, 0.19), now, 0.26);
-    mainSignalRainNoiseGainRef.current?.gain.setTargetAtTime(clamp(0.0001 + rainInfluence * 0.006, 0.0001, 0.01), now, 0.12);
+    mainSignalRainNoiseGainRef.current?.gain.setTargetAtTime(rainInfluence > 0 ? clamp(0.001 + rainInfluence * 0.018, 0.001, 0.024) : 0, now, 0.12);
     mainSignalCompressorRef.current?.threshold.setTargetAtTime(clamp(-26 + trafficInfluence * 8, -26, -15), now, 0.15);
     mainSignalCompressorRef.current?.ratio.setTargetAtTime(clamp(1.8 + trafficInfluence * 1.6, 1.8, 3.4), now, 0.15);
     mainSignalGateRef.current?.gain.setTargetAtTime(
