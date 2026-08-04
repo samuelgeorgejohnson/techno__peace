@@ -1,24 +1,43 @@
 import SiteLayout from "./SiteLayout";
 
+const overviewCards = [
+  {
+    title: "World",
+    description: "Public essays, field notes, and a living archive of atmosphere.",
+    href: "/about",
+    ariaLabel: "Open the TechnoPeace world overview",
+  },
+  {
+    title: "Sky",
+    description: "An interactive instrument tuned by time, cloud, sun, and moon.",
+    href: "/sky",
+    ariaLabel: "Enter Sky Mode",
+  },
+  {
+    title: "Archive",
+    description: "Recorded environments and sonic traces from specific places.",
+    href: "/field-recordings",
+    ariaLabel: "Open the field recordings archive",
+  },
+  {
+    title: "Contact",
+    description: "Collaborators, context, and pathways into the work.",
+    href: "/contact",
+    ariaLabel: "Open contact information",
+  },
+];
+
 function OverviewCards() {
   return (
     <div className="tp-site-overview-grid">
-      <article className="tp-site-overview-card">
-        <h2>World</h2>
-        <p>Public essays, field notes, and a living archive of atmosphere.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Sky</h2>
-        <p>An interactive instrument tuned by time, cloud, sun, and moon.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Archive</h2>
-        <p>Recorded environments and sonic traces from specific places.</p>
-      </article>
-      <article className="tp-site-overview-card">
-        <h2>Contact</h2>
-        <p>Collaborators, context, and pathways into the work.</p>
-      </article>
+      {overviewCards.map((card) => (
+        <a key={card.title} className="tp-site-overview-card" href={card.href} aria-label={card.ariaLabel}>
+          <article>
+            <h2>{card.title}</h2>
+            <p>{card.description}</p>
+          </article>
+        </a>
+      ))}
     </div>
   );
 }
@@ -29,6 +48,7 @@ export function SiteHomePage() {
       title="TechnoPeace"
       subtitle="Calm systems for peace, weather, and attention."
       description="A cinematic world site and a gateway into Sky Mode, where live local conditions gently shape light, haze, and sound."
+      showHeroActions
     >
       <OverviewCards />
     </SiteLayout>
@@ -88,7 +108,7 @@ export function ChaosPlaceholderPage() {
       description="Chaos Mode route is reserved for a future playable system while Sky Mode remains the active instrument."
     >
       <section className="tp-site-actions">
-        <a className="tp-site-primary" href="/app/sky">Launch Sky Mode</a>
+        <a className="tp-site-primary" href="/sky">Launch Sky Mode</a>
       </section>
     </SiteLayout>
   );

@@ -5,6 +5,7 @@ type SiteLayoutProps = {
   subtitle?: string;
   description: string;
   children?: ReactNode;
+  showHeroActions?: boolean;
 };
 
 function NavLink({ href, label }: { href: string; label: string }) {
@@ -15,7 +16,13 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-export default function SiteLayout({ title, subtitle, description, children }: SiteLayoutProps) {
+export default function SiteLayout({
+  title,
+  subtitle,
+  description,
+  children,
+  showHeroActions = false,
+}: SiteLayoutProps) {
   return (
     <main className="tp-site-home">
       <section className="tp-site-hero-stage">
@@ -26,12 +33,12 @@ export default function SiteLayout({ title, subtitle, description, children }: S
           </a>
           <nav className="tp-site-nav" aria-label="Primary">
             <NavLink href="/about" label="About" />
-            <NavLink href="/" label="Mission" />
+            <NavLink href="/mission" label="Mission" />
             <NavLink href="/essays" label="Essays" />
             <NavLink href="/field-recordings" label="Field Recordings" />
-            <NavLink href="/about" label="Contact" />
+            <NavLink href="/contact" label="Contact" />
           </nav>
-          <a className="tp-site-enter-pill" href="/app/sky">
+          <a className="tp-site-enter-pill" href="/sky" aria-label="Enter Sky Mode">
             Enter Sky Mode
           </a>
         </header>
@@ -40,10 +47,12 @@ export default function SiteLayout({ title, subtitle, description, children }: S
           <h1>{title}</h1>
           {subtitle ? <p className="tp-site-subtitle">{subtitle}</p> : null}
           <p>{description}</p>
-          <div className="tp-site-actions">
-            <a className="tp-site-primary" href="/app/sky">Enter Sky Mode</a>
-            <a className="tp-site-secondary" href="/field-recordings">Explore the World</a>
-          </div>
+          {showHeroActions ? (
+            <div className="tp-site-actions">
+              <a className="tp-site-primary" href="/sky">Enter Sky Mode</a>
+              <a className="tp-site-secondary" href="/about">Explore the World</a>
+            </div>
+          ) : null}
         </div>
       </section>
 

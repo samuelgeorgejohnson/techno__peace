@@ -633,3 +633,53 @@ body {
     align-items: center;
   }
 }
+
+/* Navigation/accessibility hardening */
+.tp-site-hero-bg {
+  pointer-events: none;
+}
+
+.tp-site-logo-wrap,
+.tp-site-nav-link,
+.tp-site-enter-pill,
+.tp-site-primary,
+.tp-site-secondary,
+.tp-site-overview-card {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.tp-site-logo-wrap,
+.tp-site-overview-card {
+  position: relative;
+  z-index: 5;
+}
+
+.tp-site-logo-wrap:focus-visible,
+.tp-site-nav-link:focus-visible,
+.tp-site-enter-pill:focus-visible,
+.tp-site-primary:focus-visible,
+.tp-site-secondary:focus-visible,
+.tp-site-overview-card:focus-visible {
+  outline: 3px solid rgba(244, 247, 253, 0.95);
+  outline-offset: 4px;
+}
+
+.tp-site-overview-card {
+  color: inherit;
+}
+
+.tp-site-overview-card article {
+  width: 100%;
+}
+
+.tp-site-overview-card:hover,
+.tp-site-overview-card:focus-visible {
+  border-color: rgba(244, 247, 253, 0.56);
+  transform: translateY(-1px);
+}
