@@ -634,28 +634,7 @@ body {
   }
 }
 
-/* Public beta shell stabilization */
-html {
-  overflow-x: hidden;
-}
-
-body {
-  width: 100%;
-  min-width: 0;
-}
-
-.tp-site-home,
-.tp-site-hero-stage,
-.tp-site-lower {
-  max-width: 100vw;
-}
-
-.tp-site-nav-shell,
-.tp-site-nav,
-.tp-site-actions {
-  min-width: 0;
-}
-
+/* Public beta accessibility polish: preserve main layout rules, add focus/tap affordances only. */
 .tp-site-logo-wrap,
 .tp-site-nav-link,
 .tp-site-enter-pill,
@@ -681,63 +660,6 @@ body {
 .tp-site-secondary {
   line-height: 1.15;
   text-align: center;
-}
-
-.tp-site-hero-content {
-  isolation: isolate;
-  overflow-wrap: break-word;
-}
-
-.tp-site-hero-content h1 {
-  font-size: clamp(2.25rem, 10vw, 5.4rem);
-  line-height: 1;
-  text-wrap: balance;
-}
-
-.tp-site-hero-content > p,
-.tp-site-subtitle {
-  text-wrap: pretty;
-}
-
-@media (max-width: 640px) {
-  .tp-site-hero-stage {
-    padding-left: max(14px, env(safe-area-inset-left));
-    padding-right: max(14px, env(safe-area-inset-right));
-  }
-
-  .tp-site-nav {
-    width: 100%;
-    max-width: 360px;
-    gap: 8px;
-  }
-
-  .tp-site-nav-link {
-    flex: 1 1 calc(50% - 8px);
-    justify-content: center;
-    white-space: normal;
-  }
-
-  .tp-site-nav-link:nth-child(5) {
-    flex-basis: min(100%, 180px);
-  }
-
-  .tp-site-hero-content {
-    padding: 24px 14px;
-    border-radius: 20px;
-  }
-}
-
-@media (max-width: 360px) {
-  .tp-site-nav-link {
-    padding-left: 10px;
-    padding-right: 10px;
-    font-size: 0.8rem;
-  }
-
-  .tp-site-hero-content h1 {
-    font-size: clamp(2.05rem, 11vw, 2.45rem);
-    letter-spacing: -0.055em;
-  }
 }
 
 /* Environmental homepage atmosphere */
