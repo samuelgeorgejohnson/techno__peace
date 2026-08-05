@@ -769,3 +769,76 @@ body {
     animation: none;
   }
 }
+
+/* Long-form site pages */
+.tp-site-text-page {
+  width: min(880px, 100%);
+  margin: 0 auto;
+  color: rgba(235, 243, 255, 0.9);
+}
+
+.tp-site-text-section {
+  padding: clamp(24px, 4vw, 42px) 0;
+  border-top: 1px solid rgba(202, 221, 248, 0.18);
+}
+
+.tp-site-text-section:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.tp-site-text-section h2 {
+  margin: 0 0 18px;
+  color: #f6f8ff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+}
+
+.tp-site-text-section p,
+.tp-site-text-section li,
+.tp-site-text-section blockquote {
+  font-size: clamp(1rem, 2vw, 1.15rem);
+  line-height: 1.72;
+}
+
+.tp-site-text-section p {
+  margin: 0 0 1rem;
+}
+
+.tp-site-text-section ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 1rem 0 1.4rem;
+  padding-left: 1.2rem;
+}
+
+.tp-site-text-section li::marker {
+  color: #b7d4ff;
+}
+
+.tp-site-text-section blockquote {
+  margin: 1.2rem 0;
+  padding: 18px 22px;
+  border-left: 3px solid rgba(183, 212, 255, 0.72);
+  border-radius: 14px;
+  background: rgba(10, 17, 31, 0.72);
+  color: #f5f8ff;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.tp-site-text-coda {
+  margin: clamp(16px, 3vw, 28px) 0 0;
+  color: #f6f8ff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 7vw, 4.5rem);
+  line-height: 1;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .tp-site-text-section ul {
+    grid-template-columns: 1fr;
+  }
+}

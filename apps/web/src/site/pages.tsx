@@ -104,8 +104,85 @@ export function SiteHomePage() {
 
 export function AboutPage() {
   return (
-    <SiteLayout title="About / Contact" description="Placeholder for project story, collaborators, and contact pathways.">
-      <OverviewCards />
+    <SiteLayout
+      title="About TechnoPeace"
+      subtitle="Play the World."
+      description="TechnoPeace is an environmental musical instrument that transforms the conditions of a place into sound."
+    >
+      <article className="tp-site-text-page">
+        <section className="tp-site-text-section tp-site-text-section-intro">
+          <p>
+            Weather, daylight, clouds, wind, rain, and time are not treated as background information—they become part of
+            the instrument itself. Rather than composing against the environment, TechnoPeace composes with it.
+          </p>
+          <p>
+            Every location has a different atmosphere. Every hour changes the character of the instrument. No performance
+            is exactly repeatable because the world itself is always changing.
+          </p>
+          <p>Today, TechnoPeace exists as a browser-based instrument.</p>
+          <p>
+            Tomorrow, it will become a collection of field recordings, performances, educational tools, research,
+            installations, and open-source technology exploring the relationship between sound, ecology, and human
+            attention.
+          </p>
+        </section>
+
+        <section className="tp-site-text-section" aria-labelledby="about-why-heading">
+          <h2 id="about-why-heading">Why</h2>
+          <p>Modern technology is extraordinarily good at capturing attention.</p>
+          <p>Very little of it helps us pay attention.</p>
+          <p>TechnoPeace asks a simple question:</p>
+          <blockquote>What if technology helped us notice the world instead of replacing it?</blockquote>
+          <p>Instead of endless feeds and notifications, the instrument invites listening.</p>
+          <p>Instead of escape, it encourages presence.</p>
+          <p>Instead of generating sound in isolation, it responds to weather, place, and time.</p>
+          <p>The goal is not productivity.</p>
+          <p>The goal is awareness.</p>
+        </section>
+
+        <section className="tp-site-text-section" aria-labelledby="about-project-heading">
+          <h2 id="about-project-heading">The Project</h2>
+          <p>
+            TechnoPeace combines ideas from music technology, sound art, environmental sensing, acoustics, and interaction
+            design.
+          </p>
+          <p>Current areas of development include:</p>
+          <ul>
+            <li>Environmental musical instruments</li>
+            <li>Weather-driven synthesis</li>
+            <li>Field recording</li>
+            <li>Soundscape ecology</li>
+            <li>Spatial and immersive audio</li>
+            <li>Acoustic measurement</li>
+            <li>Renewable-powered performance systems</li>
+            <li>Open educational resources</li>
+            <li>Interactive installations</li>
+          </ul>
+          <p>Each part supports the same question:</p>
+          <blockquote>
+            How can technology help people build a more attentive relationship with the world around them?
+          </blockquote>
+        </section>
+
+        <section className="tp-site-text-section" aria-labelledby="about-looking-forward-heading">
+          <h2 id="about-looking-forward-heading">Looking Forward</h2>
+          <p>This is version 0.1.0.</p>
+          <p>The public beta marks the beginning of a much larger project.</p>
+          <p>Future work includes:</p>
+          <ul>
+            <li>A growing archive of environmental recordings.</li>
+            <li>TechnoPeace Field Labs documenting the sonic identity of places.</li>
+            <li>Educational resources for music, science, and environmental literacy.</li>
+            <li>Live performances driven by real-world conditions.</li>
+            <li>Research into resonance, listening, and ecological awareness.</li>
+            <li>Open-source tools that allow anyone to explore these ideas.</li>
+          </ul>
+          <p>TechnoPeace is intended to remain an evolving practice rather than a finished product.</p>
+          <p>Every update is another opportunity to listen more carefully.</p>
+        </section>
+
+        <p className="tp-site-text-coda">Play the World.</p>
+      </article>
     </SiteLayout>
   );
 }
