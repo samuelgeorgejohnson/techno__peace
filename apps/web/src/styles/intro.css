@@ -302,13 +302,13 @@ body {
 
 .tp-site-logo { width: 52px; opacity: 0.95; }
 .tp-site-nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; width: min(760px, 100%); }
-.tp-site-nav-link, .tp-site-enter-pill {
+.tp-site-nav-link {
   text-decoration: none; color: #ebf4ff; border: 1px solid rgba(255,255,255,0.28); border-radius: 999px; padding: 8px 14px;
   background: rgba(10, 24, 40, 0.22);
   white-space: nowrap;
 }
 
-.tp-site-enter-pill { white-space: nowrap; }
+.tp-site-nav-shell::after { content: ""; width: 52px; }
 
 .tp-site-hero-content { text-align: center; max-width: 820px; margin: clamp(10px, 5vh, 52px) auto clamp(8px, 4vh, 44px); }
  .tp-site-hero-content h1 { font-size: clamp(2.1rem, 8.2vw, 5.4rem); margin: 0; font-family: Georgia, 'Times New Roman', serif; letter-spacing: 0.01em; }
@@ -339,7 +339,6 @@ body {
   .tp-site-hero-content { margin-top: clamp(6px, 2vh, 24px); }
   .tp-site-nav { width: 100%; display: grid; grid-template-columns: repeat(3, max-content); justify-content: center; }
   .tp-site-nav-link { min-height: 35px; padding: 0 10px; font-size: 0.69rem; display: inline-flex; align-items: center; }
-  .tp-site-enter-pill { font-size: 0.72rem; padding: 7px 12px; }
 }
 
 @media (max-width: 420px) {
@@ -437,8 +436,7 @@ body {
 
 .tp-site-primary,
 .tp-site-secondary,
-.tp-site-nav-link,
-.tp-site-enter-pill {
+.tp-site-nav-link {
   position: relative;
   z-index: 3;
   cursor: pointer;
@@ -451,8 +449,7 @@ body {
 }
 
 .tp-site-secondary,
-.tp-site-nav-link,
-.tp-site-enter-pill {
+.tp-site-nav-link {
   background: rgba(9, 18, 36, 0.72);
   color: #f2f6ff;
   border-color: rgba(215, 231, 255, 0.34);
@@ -525,12 +522,6 @@ body {
   .tp-site-nav-link {
     min-height: 42px;
     padding: 10px 16px;
-    font-size: 0.88rem;
-  }
-
-  .tp-site-enter-pill {
-    min-height: 44px;
-    padding: 11px 19px;
     font-size: 0.88rem;
   }
 
@@ -641,7 +632,6 @@ body {
 
 .tp-site-logo-wrap,
 .tp-site-nav-link,
-.tp-site-enter-pill,
 .tp-site-primary,
 .tp-site-secondary,
 .tp-site-overview-card {
@@ -662,7 +652,6 @@ body {
 
 .tp-site-logo-wrap:focus-visible,
 .tp-site-nav-link:focus-visible,
-.tp-site-enter-pill:focus-visible,
 .tp-site-primary:focus-visible,
 .tp-site-secondary:focus-visible,
 .tp-site-overview-card:focus-visible {

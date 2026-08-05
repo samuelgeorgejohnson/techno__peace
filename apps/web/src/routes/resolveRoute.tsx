@@ -3,7 +3,6 @@ import {
   AboutPage,
   ChaosPlaceholderPage,
   ContactPage,
-  EssaysPage,
   FieldRecordingsPage,
   MissionPage,
   SiteHomePage,
@@ -26,7 +25,6 @@ export function resolveRoute(pathname: string) {
   if (path === "/app/chaos") return <ChaosPlaceholderPage />;
   if (path === "/about") return <AboutPage />;
   if (path === "/mission") return <MissionPage />;
-  if (path === "/essays") return <EssaysPage />;
   if (path === "/field-recordings") return <FieldRecordingsPage />;
   if (path === "/contact") return <ContactPage />;
 

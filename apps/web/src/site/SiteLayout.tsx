@@ -40,9 +40,6 @@ export default function SiteLayout({
             <NavLink href="/field-recordings" label="Field Recordings" />
             <NavLink href="/contact" label="Contact" />
           </nav>
-          <a className="tp-site-enter-pill" href="/sky" aria-label="Enter Sky Mode">
-            Enter Sky Mode
-          </a>
         </header>
 
         <div className="tp-site-hero-content">
