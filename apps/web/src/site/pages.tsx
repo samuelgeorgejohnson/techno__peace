@@ -1,3 +1,5 @@
+import { useMemo, type CSSProperties } from "react";
+import { useCurrentWeatherSignal } from "../hooks/useCurrentWeatherSignal";
 import SiteLayout from "./SiteLayout";
 
 const overviewCards = [
@@ -27,6 +29,48 @@ const overviewCards = [
   },
 ];
 
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function useHomeAtmosphereStyle() {
+  const weather = useCurrentWeatherSignal();
+
+  return useMemo(() => {
+    const cloud = clamp01(weather.cloudCover);
+    const daylight = weather.isDay ? 1 : 0;
+    const sun = clamp01((weather.sunAltitudeDeg + 10) / 80);
+    const humidity = clamp01(weather.humidityPct / 100);
+    const wind = clamp01(weather.windMps / 18);
+    const currentRainEvidence = Math.max(
+      Number.isFinite(weather.rainMm) ? weather.rainMm : 0,
+      Number.isFinite(weather.showersMm) ? weather.showersMm : 0,
+      Number.isFinite(weather.precipitationMm) ? weather.precipitationMm : 0,
+    );
+    const rain = clamp01(currentRainEvidence / 5);
+    const night = 1 - Math.max(daylight, sun * 0.72);
+
+    return {
+      "--tp-home-daylight": daylight.toFixed(3),
+      "--tp-home-sun": sun.toFixed(3),
+      "--tp-home-cloud": cloud.toFixed(3),
+      "--tp-home-humidity": humidity.toFixed(3),
+      "--tp-home-wind": wind.toFixed(3),
+      "--tp-home-rain": rain.toFixed(3),
+      "--tp-home-night": night.toFixed(3),
+    } as CSSProperties;
+  }, [
+    weather.cloudCover,
+    weather.humidityPct,
+    weather.isDay,
+    weather.precipitationMm,
+    weather.rainMm,
+    weather.showersMm,
+    weather.sunAltitudeDeg,
+    weather.windMps,
+  ]);
+}
+
 function OverviewCards() {
   return (
     <div className="tp-site-overview-grid">
@@ -43,8 +87,11 @@ function OverviewCards() {
 }
 
 export function SiteHomePage() {
+  const atmosphereStyle = useHomeAtmosphereStyle();
+
   return (
     <SiteLayout
+      atmosphereStyle={atmosphereStyle}
       title="TechnoPeace"
       subtitle="Calm systems for peace, weather, and attention."
       description="A cinematic world site and a gateway into Sky Mode, where live local conditions gently shape light, haze, and sound."

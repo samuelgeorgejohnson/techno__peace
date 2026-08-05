@@ -683,3 +683,89 @@ body {
   border-color: rgba(244, 247, 253, 0.56);
   transform: translateY(-1px);
 }
+
+/* Public-beta homepage atmosphere: visual only, no audio unlock on the site shell. */
+.tp-site-home {
+  --tp-home-daylight: 0;
+  --tp-home-sun: 0;
+  --tp-home-cloud: 0.35;
+  --tp-home-humidity: 0.58;
+  --tp-home-wind: 0.18;
+  --tp-home-rain: 0;
+  --tp-home-night: 0.7;
+}
+
+.tp-site-atmosphere {
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.9;
+  background:
+    radial-gradient(
+      900px 520px at 50% calc(18% + (var(--tp-home-sun) * 24%)),
+      rgba(255, 214, 156, calc(0.05 + (var(--tp-home-sun) * 0.2))),
+      rgba(255, 214, 156, 0) 68%
+    ),
+    radial-gradient(
+      1100px 620px at 50% 22%,
+      rgba(194, 218, 255, calc((var(--tp-home-humidity) + var(--tp-home-cloud)) * 0.08)),
+      rgba(194, 218, 255, 0) 72%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(8, 18, 42, calc(var(--tp-home-night) * 0.28)),
+      rgba(8, 18, 42, calc((var(--tp-home-cloud) + var(--tp-home-rain)) * 0.18)) 58%,
+      rgba(3, 7, 17, 0.42)
+    );
+  mix-blend-mode: screen;
+}
+
+.tp-site-atmosphere::before,
+.tp-site-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tp-site-atmosphere::before {
+  opacity: calc(0.08 + (var(--tp-home-cloud) * 0.42) + (var(--tp-home-humidity) * 0.1));
+  background:
+    radial-gradient(720px 260px at 18% 24%, rgba(238, 246, 255, 0.46), transparent 68%),
+    radial-gradient(820px 280px at 78% 32%, rgba(220, 232, 248, 0.38), transparent 70%),
+    linear-gradient(180deg, rgba(220, 232, 246, 0.13), rgba(220, 232, 246, 0) 46%);
+  transform: translate3d(calc(var(--tp-home-wind) * -2%), 0, 0);
+  animation: tp-home-cloud-breathe 32s ease-in-out infinite alternate;
+}
+
+.tp-site-atmosphere::after {
+  opacity: calc(var(--tp-home-rain) * 0.28);
+  background:
+    repeating-linear-gradient(
+      105deg,
+      rgba(210, 229, 255, 0) 0 16px,
+      rgba(210, 229, 255, 0.26) 17px,
+      rgba(210, 229, 255, 0) 19px
+    );
+  filter: blur(0.35px);
+  transform: translate3d(calc(var(--tp-home-wind) * -1.5%), 0, 0);
+  animation: tp-home-rain-drift 1.8s linear infinite;
+}
+
+@keyframes tp-home-cloud-breathe {
+  from { transform: translate3d(calc(var(--tp-home-wind) * -2%), 0, 0); }
+  to { transform: translate3d(calc(var(--tp-home-wind) * 2%), -1%, 0); }
+}
+
+@keyframes tp-home-rain-drift {
+  from { background-position: 0 0; }
+  to { background-position: 36px 96px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-site-atmosphere::before,
+  .tp-site-atmosphere::after {
+    animation: none;
+  }
+}
