@@ -94,6 +94,146 @@ type DiagnosticRow = {
   note: string;
 };
 
+
+function MixerFader({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const boundsRef = useRef<DOMRect | null>(null);
+  const activePointerRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingValueRef = useRef(value);
+  const [isActive, setIsActive] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const clampedValue = clampRange(value, 0, 200);
+  const percent = (clampedValue / 200) * 100;
+
+  useEffect(() => {
+    pendingValueRef.current = clampedValue;
+  }, [clampedValue]);
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const commitValue = useCallback((nextValue: number) => {
+    pendingValueRef.current = clampRange(Math.round(nextValue), 0, 200);
+    if (rafRef.current !== null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      onChange(pendingValueRef.current);
+    });
+  }, [onChange]);
+
+  const valueFromPointer = useCallback((clientY: number) => {
+    const rect = boundsRef.current ?? trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.height <= 0) return clampedValue;
+    const normalized = clamp01((rect.bottom - clientY) / rect.height);
+    return normalized * 200;
+  }, [clampedValue]);
+
+  const endDrag = useCallback((event?: React.PointerEvent<HTMLDivElement>) => {
+    const pointerId = activePointerRef.current;
+    if (event && pointerId !== null && event.currentTarget.hasPointerCapture?.(pointerId)) {
+      event.currentTarget.releasePointerCapture(pointerId);
+    }
+    activePointerRef.current = null;
+    boundsRef.current = null;
+    setIsActive(false);
+  }, []);
+
+  return (
+    <div
+      ref={trackRef}
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={200}
+      aria-valuenow={clampedValue}
+      aria-valuetext={`${clampedValue}%`}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        boundsRef.current = event.currentTarget.getBoundingClientRect();
+        activePointerRef.current = event.pointerId;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        setIsActive(true);
+        commitValue(valueFromPointer(event.clientY));
+      }}
+      onPointerMove={(event) => {
+        if (activePointerRef.current !== event.pointerId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        commitValue(valueFromPointer(event.clientY));
+      }}
+      onPointerUp={(event) => {
+        if (activePointerRef.current !== event.pointerId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        commitValue(valueFromPointer(event.clientY));
+        endDrag(event);
+      }}
+      onPointerCancel={(event) => {
+        if (activePointerRef.current !== event.pointerId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        endDrag(event);
+      }}
+      onLostPointerCapture={() => endDrag()}
+      onDragStart={(event) => event.preventDefault()}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => {
+        setIsFocused(false);
+        endDrag();
+      }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 10 : 1;
+        let next = clampedValue;
+        if (event.key === "ArrowUp" || event.key === "ArrowRight") next += step;
+        else if (event.key === "ArrowDown" || event.key === "ArrowLeft") next -= step;
+        else if (event.key === "PageUp") next += 10;
+        else if (event.key === "PageDown") next -= 10;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = 200;
+        else return;
+        event.preventDefault();
+        event.stopPropagation();
+        onChange(clampRange(next, 0, 200));
+      }}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: 176,
+        minWidth: 56,
+        touchAction: "none",
+        cursor: "ns-resize",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        borderRadius: 999,
+        background: isActive ? "rgba(120,176,255,0.18)" : "rgba(255,255,255,0.07)",
+        border: isActive ? "1px solid rgba(182,214,255,0.68)" : "1px solid rgba(255,255,255,0.12)",
+        outline: "none",
+        boxShadow: isActive
+          ? "0 0 0 4px rgba(120,176,255,0.14)"
+          : isFocused
+            ? "0 0 0 3px rgba(255,255,255,0.22), inset 0 0 18px rgba(0,0,0,0.16)"
+            : "inset 0 0 18px rgba(0,0,0,0.16)",
+      }}
+    >
+      <div style={{ position: "absolute", left: 12, right: 12, bottom: 12, height: `calc(${percent}% - 12px)`, borderRadius: 999, background: "linear-gradient(180deg, rgba(182,214,255,0.95), rgba(120,176,255,0.82))", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", left: "50%", bottom: `calc(${percent}% - 18px)`, transform: "translateX(-50%)", width: 44, height: 44, borderRadius: "50%", background: isActive ? "rgba(230,242,255,0.98)" : "rgba(210,228,255,0.92)", boxShadow: isActive ? "0 0 18px rgba(150,195,255,0.8)" : "0 6px 16px rgba(0,0,0,0.28)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", top: 8, left: 0, right: 0, textAlign: "center", fontSize: 11, color: isActive ? "white" : "rgba(255,255,255,0.72)", pointerEvents: "none" }}>{clampedValue}%</div>
+    </div>
+  );
+}
+
 const initialMixerPages: MixerPage[] = [
   {
     id: "weather",
@@ -1605,19 +1745,10 @@ export default function SkyInstrument({
                     {channelStatusText(channel.id)}
                   </div>
 
-                  <input
-                    type="range"
-                    min={0}
-                    max={200}
+                  <MixerFader
+                    label={`${channel.name} level`}
                     value={mixLevels[channel.id] ?? 100}
-                    onPointerDown={stopMixerEvent}
-                    onPointerUp={stopMixerEvent}
-                    onClick={stopMixerEvent}
-                    onChange={(e) =>
-                      updateChannelLevel(channel.id, Number(e.currentTarget.value))
-                    }
-                    aria-label={`${channel.name} level`}
-                    style={{ writingMode: "vertical-lr", width: "100%", height: 160 }}
+                    onChange={(nextLevel) => updateChannelLevel(channel.id, nextLevel)}
                   />
 
                   <div

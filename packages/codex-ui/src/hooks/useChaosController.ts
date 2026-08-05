@@ -12,10 +12,29 @@ export const useChaosController = (targetRef: RefObject<HTMLElement>) => {
       return undefined;
     }
 
-    const handlePointerMove = (event: PointerEvent) => {
-      const rect = target.getBoundingClientRect();
+    let activePointerId: number | null = null;
+    let bounds: DOMRect | null = null;
+
+    const readPoint = (event: PointerEvent) => {
+      const rect = bounds ?? target.getBoundingClientRect();
       const x = clamp01((event.clientX - rect.left) / rect.width);
       const y = clamp01((event.clientY - rect.top) / rect.height);
+      return { x, y };
+    };
+
+    const finishPointer = (event: PointerEvent) => {
+      if (activePointerId !== null && target.hasPointerCapture?.(activePointerId)) {
+        target.releasePointerCapture(activePointerId);
+      }
+      activePointerId = null;
+      bounds = null;
+      setState((current) => ({ ...current, active: false, gesture: "idle", pressure: 0 }));
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (activePointerId !== null && event.pointerId !== activePointerId) return;
+      if (activePointerId !== null) event.preventDefault();
+      const { x, y } = readPoint(event);
 
       setState((current) => ({
         ...current,
@@ -27,9 +46,11 @@ export const useChaosController = (targetRef: RefObject<HTMLElement>) => {
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      const rect = target.getBoundingClientRect();
-      const x = clamp01((event.clientX - rect.left) / rect.width);
-      const y = clamp01((event.clientY - rect.top) / rect.height);
+      event.preventDefault();
+      activePointerId = event.pointerId;
+      bounds = target.getBoundingClientRect();
+      target.setPointerCapture?.(event.pointerId);
+      const { x, y } = readPoint(event);
       setState((current) => ({
         ...current,
         x,
@@ -40,8 +61,9 @@ export const useChaosController = (targetRef: RefObject<HTMLElement>) => {
       }));
     };
 
-    const handlePointerUp = () => {
-      setState((current) => ({ ...current, active: false, gesture: "idle", pressure: 0 }));
+    const handlePointerUp = (event: PointerEvent) => {
+      if (activePointerId !== null && event.pointerId !== activePointerId) return;
+      finishPointer(event);
     };
 
     const handleOrientation = (event: DeviceOrientationEvent) => {
@@ -54,13 +76,17 @@ export const useChaosController = (targetRef: RefObject<HTMLElement>) => {
 
     target.addEventListener("pointermove", handlePointerMove);
     target.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("pointerup", handlePointerUp);
+    target.addEventListener("pointerup", handlePointerUp);
+    target.addEventListener("pointercancel", handlePointerUp);
+    target.addEventListener("lostpointercapture", handlePointerUp);
     window.addEventListener("deviceorientation", handleOrientation);
 
     return () => {
       target.removeEventListener("pointermove", handlePointerMove);
       target.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("pointerup", handlePointerUp);
+      target.removeEventListener("pointerup", handlePointerUp);
+      target.removeEventListener("pointercancel", handlePointerUp);
+      target.removeEventListener("lostpointercapture", handlePointerUp);
       window.removeEventListener("deviceorientation", handleOrientation);
     };
   }, [targetRef]);
