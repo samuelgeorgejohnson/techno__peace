@@ -233,7 +233,8 @@ export default function SkyInstrument({
     [activePageId],
   );
   const rawWind = clamp01(weather.windMps / 20);
-  const rawRain = clamp01((weather.rainMm + weather.showersMm) / 5);
+  const currentRainMm = Math.max(weather.rainMm, weather.showersMm, weather.precipitationMm);
+  const rawRain = clamp01(currentRainMm / 5);
   const rawHumidity = clamp01(weather.humidityPct / 100);
   const windMix = (mixLevels.wind ?? 100) / 100;
   const rainMix = (mixLevels.rain ?? 100) / 100;
@@ -369,11 +370,11 @@ export default function SkyInstrument({
       {
         category: "Weather values",
         label: "Rain",
-        raw: `${fmtNumber(weather.rainMm + weather.showersMm, 2)} mm`,
+        raw: `${fmtNumber(currentRainMm, 2)} mm`,
         userControl: fmtPercent(rainMix),
         effective: `${fmtNumber(effectiveRain * 5, 2)} mm`,
         source: weatherSourceStatus,
-        note: "rain + showers scaled by mixer rain",
+        note: "current rain, showers, or precipitation evidence scaled by mixer rain",
       },
       {
         category: "Weather values",
@@ -456,7 +457,7 @@ export default function SkyInstrument({
       {
         category: "Final audio modulation values",
         label: "Payload windMps / rainMm / humidityPct",
-        raw: `${fmtNumber(weather.windMps, 2)} / ${fmtNumber(weather.rainMm + weather.showersMm, 2)} / ${fmtNumber(weather.humidityPct, 1)}`,
+        raw: `${fmtNumber(weather.windMps, 2)} / ${fmtNumber(currentRainMm, 2)} / ${fmtNumber(weather.humidityPct, 1)}`,
         userControl: `${Math.round(windMix * 100)} / ${Math.round(rainMix * 100)} / ${Math.round(humidityMix * 100)}%`,
         effective: `${fmtNumber(effectiveWind * 20, 2)} / ${fmtNumber(effectiveRain * 5, 2)} / ${fmtNumber(effectiveHumidity * 100, 1)}`,
         source: weatherSourceStatus,
@@ -473,7 +474,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.rainMm, weather.showersMm, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentRainMm, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -516,7 +517,7 @@ export default function SkyInstrument({
       moonPhase: weather.moonPhase,
       temperatureC: weather.temperatureC,
       rainMm: effectiveRain * 5,
-      precipitationMm: weather.precipitationMm,
+      precipitationMm: effectiveRain * 5,
       dailyRainMm: weather.dailyRainMm,
       showersMm: 0,
       sunLevel: effectiveSun,
@@ -633,7 +634,7 @@ export default function SkyInstrument({
   }
 
   function isPerformancePointerTarget(target: EventTarget | null) {
-    return target instanceof HTMLElement && target.closest("[data-sky-control='true']") === null;
+    return target instanceof HTMLElement && target.closest("[data-sky-control='true'], button, a, input, select, textarea, [role='button']") === null;
   }
 
   async function onPointerDown(e: React.PointerEvent) {
@@ -657,7 +658,9 @@ export default function SkyInstrument({
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio || !isDragging || !isPerformancePointerTarget(e.target)) return;
+    if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
+    if (performanceMode === "sky" && !activeTouches[e.pointerId] && !isDragging) return;
+    if (performanceMode !== "sky" && !isDragging) return;
     e.preventDefault();
     const { x, y } = getXY(e);
     const pressure = clamp01(Math.max(dronePressure, e.pressure || dronePressure));
@@ -671,10 +674,11 @@ export default function SkyInstrument({
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
+    if (mixerOpen || !hasUnlockedAudio) return;
     e.preventDefault();
     const { x, y } = getXY(e);
-    setIsDragging(Object.keys(activeTouches).length > 1);
+    const remainingTouchCount = Math.max(0, Object.keys(activeTouches).length - (activeTouches[e.pointerId] ? 1 : 0));
+    setIsDragging(remainingTouchCount > 0);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
     if (performanceMode === "sky") {
       setActiveTouches((prev) => {
@@ -757,7 +761,6 @@ export default function SkyInstrument({
   function setMonitorLayer(layer: keyof AudioMonitorState, nextValue: boolean) {
     setAudioMonitor((prev) => {
       if (prev[layer] === nextValue) return prev;
-      console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextValue ? "on" : "off"}`);
       return { ...prev, [layer]: nextValue };
     });
   }
@@ -768,7 +771,6 @@ export default function SkyInstrument({
       (Object.keys(nextState) as Array<keyof AudioMonitorState>).forEach((layer) => {
         if (prev[layer] !== nextState[layer]) {
           changed = true;
-          console.log(`audio monitor: ${AUDIO_MONITOR_LABELS[layer]} ${nextState[layer] ? "on" : "off"}`);
         }
       });
       return changed ? nextState : prev;
@@ -869,7 +871,8 @@ export default function SkyInstrument({
         height: "100dvh",
         minHeight: "100svh",
         overflow: "hidden",
-        touchAction: mixerOpen ? "auto" : "none",
+        touchAction: "none",
+        overscrollBehavior: "none",
         userSelect: "none",
         WebkitUserSelect: "none",
         background: `linear-gradient(180deg, ${sky.topColor} 0%, ${sky.midColor} 54%, ${sky.horizonColor} 100%)`,

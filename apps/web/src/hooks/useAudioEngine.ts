@@ -744,7 +744,6 @@ export function useAudioEngine() {
         chirpGain.connect(daylifeFilterRef.current);
         chirp.start(now);
         chirp.stop(now + dur + 0.02);
-        console.log("[audio] bird event", { birdsLevel, birdActivity, startFreq, endFreq, dur, amp });
       }
       nextDaylifeEventRef.current = now + (0.16 + (1 - clamp(birdActivity / 2)) * 0.7) * (0.8 + Math.random() * 0.6);
     }
@@ -770,7 +769,6 @@ export function useAudioEngine() {
             part.start(strikeTime);
             part.stop(strikeTime + decay * (0.95 + idx * 0.25));
           });
-          console.log("[audio] chime event", { windMps: p.windMps, chimeActivity: chimeActivityRef.current, base, decay, amp });
         };
 
         strike(0, 1);
@@ -801,7 +799,6 @@ export function useAudioEngine() {
         const passPan = clamp((Math.random() * 2 - 1) * (0.4 + 0.5 * airProximity), -0.95, 0.95);
         airPannerRef.current.pan.setValueAtTime(-passPan, now);
         airPannerRef.current.pan.linearRampToValueAtTime(passPan, now + dur);
-        console.log("[audio] air pass event", { airMix, airDensity, airProximity, airMotion, startFreq, endFreq, dur, amp });
       }
       nextAirPassEventRef.current = now + (4 + (1 - airProximity) * 4) * (0.85 + Math.random() * 0.5);
     }
@@ -823,7 +820,6 @@ export function useAudioEngine() {
         blipGain.connect(trafficFilterRef.current);
         blip.start(now);
         blip.stop(now + dur + 0.03);
-        console.log("[audio] traffic event", { trafficDensity, flow, delay, pulseRate, trafficJitter, hz, amp, isChaosMode, trafficReliable });
       }
       nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
     }

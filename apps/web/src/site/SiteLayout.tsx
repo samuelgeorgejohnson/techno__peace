@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 type SiteLayoutProps = {
   title: string;
@@ -6,6 +6,7 @@ type SiteLayoutProps = {
   description: string;
   children?: ReactNode;
   showHeroActions?: boolean;
+  atmosphereStyle?: CSSProperties;
 };
 
 function NavLink({ href, label }: { href: string; label: string }) {
@@ -22,11 +23,13 @@ export default function SiteLayout({
   description,
   children,
   showHeroActions = false,
+  atmosphereStyle,
 }: SiteLayoutProps) {
   return (
-    <main className="tp-site-home">
+    <main className="tp-site-home" style={atmosphereStyle}>
       <section className="tp-site-hero-stage">
         <div className="tp-site-hero-bg" aria-hidden="true" />
+        <div className="tp-site-atmosphere" aria-hidden="true" />
         <header className="tp-site-nav-shell">
           <a className="tp-site-logo-wrap" href="/" aria-label="TechnoPeace home">
             <img src="/assets/logo/technopeace-dove.svg" className="tp-site-logo" alt="" />
