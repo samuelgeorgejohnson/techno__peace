@@ -190,8 +190,8 @@ export function AboutPage() {
 export function MissionPage() {
   return (
     <SiteLayout
-      title="Mission"
-      description="TechnoPeace explores the relationship between people, place, weather, sound, and technology through instruments, field recordings, research, and art."
+      title="Play the World."
+      description="Technology can deepen our relationship with place. Through environmental instruments, field recording, research, and art, TechnoPeace explores how weather, time, and landscape become music."
     >
       <article className="tp-site-text-page">
         <section className="tp-site-text-section tp-site-text-section-intro">
