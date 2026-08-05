@@ -193,7 +193,97 @@ export function MissionPage() {
       title="Mission"
       description="TechnoPeace explores the relationship between people, place, weather, sound, and technology through instruments, field recordings, research, and art."
     >
-      <OverviewCards />
+      <article className="tp-site-text-page">
+        <section className="tp-site-text-section tp-site-text-section-intro">
+          <h2>Our Mission</h2>
+          <p>Technology has changed how we see the world.</p>
+          <p>It has also changed how we listen to it.</p>
+          <p>
+            Our phones know where we are, how fast we’re moving, what the weather is, what music we enjoy, and who we’re
+            connected to. Yet despite having more information than any generation before us, many of us spend less time
+            paying attention to the places we actually inhabit.
+          </p>
+          <p>TechnoPeace exists to explore a different relationship with technology.</p>
+          <p>One that encourages observation instead of distraction.</p>
+          <p>Listening instead of scrolling.</p>
+          <p>Curiosity instead of consumption.</p>
+          <p>We believe technology should help us notice the world—not replace it.</p>
+        </section>
+
+        <section className="tp-site-text-section">
+          <h2>The World Is Already Making Music</h2>
+          <p>Wind has rhythm.</p>
+          <p>Rain has texture.</p>
+          <p>Clouds change light.</p>
+          <p>Birds mark the seasons.</p>
+          <p>Cities develop their own pulse.</p>
+          <p>Every place has patterns that exist whether we pay attention to them or not.</p>
+          <p>TechnoPeace treats those patterns as creative material.</p>
+          <p>Weather becomes part of an instrument.</p>
+          <p>Time of day changes harmony.</p>
+          <p>Environmental conditions shape sound.</p>
+          <p>Instead of composing against nature, we compose with it.</p>
+        </section>
+
+        <section className="tp-site-text-section">
+          <h2>Peace Is a Practice</h2>
+          <p>For us, peace is not simply the absence of conflict.</p>
+          <p>It is the practice of paying attention.</p>
+          <p>It is slowing down long enough to hear where you are.</p>
+          <p>It is recognizing that people, places, and ecosystems are interconnected rather than isolated.</p>
+          <p>Technology can either pull us away from that awareness or help us cultivate it.</p>
+          <p>We choose the second path.</p>
+        </section>
+
+        <section className="tp-site-text-section">
+          <h2>Building Better Instruments</h2>
+          <p>Throughout history, instruments have expanded human perception.</p>
+          <p>The telescope extended sight.</p>
+          <p>The microscope revealed hidden worlds.</p>
+          <p>The camera preserved moments.</p>
+          <p>The synthesizer created entirely new sonic possibilities.</p>
+          <p>We believe environmental instruments deserve a place in that lineage.</p>
+          <p>Tools that don’t simply produce sound, but respond to the living systems around them.</p>
+          <p>Tools that encourage exploration rather than passive consumption.</p>
+          <p>Tools that invite collaboration between people and place.</p>
+        </section>
+
+        <section className="tp-site-text-section">
+          <h2>An Open Practice</h2>
+          <p>TechnoPeace is more than a website or a single application.</p>
+          <p>It is an ongoing practice of listening, making, measuring, teaching, and sharing.</p>
+          <p>That practice includes:</p>
+          <ul>
+            <li>Environmental musical instruments</li>
+            <li>Field recording</li>
+            <li>Soundscape ecology</li>
+            <li>Acoustics</li>
+            <li>Renewable-powered performance</li>
+            <li>Arts education</li>
+            <li>Open-source software</li>
+            <li>Research</li>
+            <li>Public performance</li>
+          </ul>
+          <p>Each project asks the same question:</p>
+          <p>How can technology deepen our relationship with the world instead of distracting us from it?</p>
+        </section>
+
+        <section className="tp-site-text-section">
+          <h2>Looking Ahead</h2>
+          <p>We imagine a future where technology helps people become more attentive to their surroundings.</p>
+          <p>Where artists collaborate with ecologists.</p>
+          <p>Where students learn science through sound.</p>
+          <p>Where performances respond to weather instead of ignoring it.</p>
+          <p>Where listening becomes an everyday act of care.</p>
+          <p>TechnoPeace is one attempt to build toward that future.</p>
+          <p>Every recording.</p>
+          <p>Every performance.</p>
+          <p>Every line of code.</p>
+          <p>Every conversation.</p>
+          <p>Every update.</p>
+          <p>One step closer to playing the world.</p>
+        </section>
+      </article>
     </SiteLayout>
   );
 }

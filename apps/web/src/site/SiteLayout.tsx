@@ -37,7 +37,6 @@ export default function SiteLayout({
           <nav className="tp-site-nav" aria-label="Primary">
             <NavLink href="/about" label="About" />
             <NavLink href="/mission" label="Mission" />
-            <NavLink href="/essays" label="Essays" />
             <NavLink href="/field-recordings" label="Field Recordings" />
             <NavLink href="/contact" label="Contact" />
           </nav>
