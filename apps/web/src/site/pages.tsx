@@ -294,6 +294,13 @@ export function ContactPage() {
       title="Contact"
       description="Get in touch regarding collaborations, performances, research, education, or field recording projects."
     >
+      <article className="tp-site-text-page">
+        <section className="tp-site-text-section tp-site-text-section-intro">
+          <p>
+            Email <a href="mailto:sam@technopeace.org">sam@technopeace.org</a>
+          </p>
+        </section>
+      </article>
       <OverviewCards />
     </SiteLayout>
   );
