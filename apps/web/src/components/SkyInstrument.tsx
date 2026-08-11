@@ -68,6 +68,7 @@ type Pt = { x: number; y: number; pressure: number };
 type ActiveTouch = Pt & { pointerId: number; startedAt: number; voiceId: number };
 
 const CHAOS_STEPS = 16;
+const SCALE_LABELS = ["1", "2", "♭3", "4", "5", "♭6", "♭7"];
 const CHAOS_LANES: Array<{ id: ChaosLaneId; label: string }> = [
   { id: "kick", label: "Kick" },
   { id: "bass", label: "Bass" },
@@ -222,6 +223,11 @@ export default function SkyInstrument({
   const [skyHold, setSkyHold] = useState(false);
   const [activeTouches, setActiveTouches] = useState<Record<number, ActiveTouch>>({});
   const [heldSkyVoices, setHeldSkyVoices] = useState<Pt[]>([]);
+  const [octaveShift, setOctaveShift] = useState<-2 | -1 | 0 | 1 | 2>(0);
+  const [chaosScaleDegree, setChaosScaleDegree] = useState(0);
+  const [chaosBassSequence, setChaosBassSequence] = useState<number[]>([]);
+  const [kickPitchSemitones, setKickPitchSemitones] = useState(0);
+  const [hatPitchSemitones, setHatPitchSemitones] = useState(0);
   const nextVoiceIdRef = useRef(1);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
@@ -535,12 +541,17 @@ export default function SkyInstrument({
       pulseLock,
       holdChaos,
       skyHold,
+      octaveShift,
+      chaosScaleDegree,
+      chaosBassSequence,
+      kickPitchSemitones,
+      hatPitchSemitones,
       skyVoices:
         performanceMode === "sky"
           ? [...Object.values(activeTouches), ...heldSkyVoices].slice(0, 4)
           : undefined,
     };
-  }, [activeTouches, birdsMix, chaosPattern, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, heldSkyVoices, holdChaos, manMadeAir.road, manMadeMix.air, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [activeTouches, birdsMix, chaosBassSequence, chaosPattern, chaosScaleDegree, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, hatPitchSemitones, heldSkyVoices, holdChaos, kickPitchSemitones, manMadeAir.road, manMadeMix.air, octaveShift, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -1092,6 +1103,11 @@ export default function SkyInstrument({
         >
           {performanceMode === "sky" ? "Mode: Sky" : "Mode: Chaos"}
         </button>
+        <div data-sky-control="true" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 6, alignItems: "center" }}>
+          <button type="button" disabled={octaveShift === -2} onClick={() => setOctaveShift((value) => Math.max(-2, value - 1) as typeof value)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave down">Octave −</button>
+          <strong aria-live="polite" style={{ minWidth: 48, textAlign: "center", fontSize: 11 }}>OCT {octaveShift > 0 ? `+${octaveShift}` : octaveShift}</strong>
+          <button type="button" disabled={octaveShift === 2} onClick={() => setOctaveShift((value) => Math.min(2, value + 1) as typeof value)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave up">Octave +</button>
+        </div>
         {performanceMode === "sky" && (
           <button type="button" onClick={() => setSkyHold((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: skyHold ? "rgba(140, 210, 255, 0.32)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
             Hold {skyHold ? "On" : "Off"}
@@ -1708,6 +1724,16 @@ export default function SkyInstrument({
               </div>
               <strong style={{ fontSize: 14 }}>{chaosTempoBpm} BPM</strong>
             </div>
+            <div style={{ display: "grid", gap: 7 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(220,234,255,.86)" }}><span>PLAYABLE SCALE · TWO OCTAVES</span><span>{SCALE_LABELS[chaosScaleDegree % 7]}{chaosScaleDegree >= 7 ? " ↑" : ""}</span></div>
+              <div role="group" aria-label="Two octave Chaos scale surface" style={{ display: "grid", gridTemplateColumns: "repeat(14, 1fr)", gap: 2, height: 42, padding: 3, borderRadius: 12, overflow: "hidden", background: "linear-gradient(90deg, rgba(89,128,194,.25), rgba(226,117,122,.3))" }}>
+                {Array.from({ length: 14 }, (_, degree) => <button key={degree} type="button" aria-label={`Scale degree ${SCALE_LABELS[degree % 7]}, ${degree < 7 ? "lower" : "upper"} octave`} onPointerEnter={(e) => { if (e.buttons) setChaosScaleDegree(degree); }} onClick={() => setChaosScaleDegree(degree)} style={{ border: 0, borderRadius: 7, padding: 0, cursor: "crosshair", background: chaosScaleDegree === degree ? "rgba(255,255,255,.76)" : degree % 2 ? "rgba(255,255,255,.07)" : "rgba(150,205,255,.13)", boxShadow: chaosScaleDegree === degree ? "0 0 14px rgba(255,255,255,.55)" : "none" }} />)}
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(220,234,255,.86)" }}>BASS NOTES · touch order</div>
+              <div role="group" aria-label="Held bass notes" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                {SCALE_LABELS.map((label, degree) => { const order = chaosBassSequence.indexOf(degree); return <button key={label} type="button" aria-pressed={order >= 0} onClick={() => setChaosBassSequence((notes) => notes.includes(degree) ? notes.filter((note) => note !== degree) : [...notes, degree])} style={{ border: "1px solid rgba(255,255,255,.14)", borderRadius: 8, padding: "7px 2px", color: "white", background: order >= 0 ? "rgba(255,157,112,.42)" : "rgba(255,255,255,.07)", cursor: "pointer", fontSize: 11 }}>{label}{order >= 0 ? ` ·${order + 1}` : ""}</button>; })}
+              </div>
+            </div>
             <div style={{ display: "grid", gap: 8, padding: 8, borderRadius: 10, background: "rgba(255,255,255,0.05)" }}>
               {CHAOS_LANES.map((lane) => (
                 <div key={lane.id} style={{ display: "grid", gridTemplateColumns: "52px repeat(16, minmax(0, 1fr))", gap: 4, alignItems: "center" }}>
@@ -1767,6 +1793,9 @@ export default function SkyInstrument({
                 style={{ width: "100%", touchAction: "pan-y", height: 28 }}
               />
             </label>
+            <div aria-label="Drum pitch" style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", alignItems: "center", fontSize: 11 }}>
+              {([['Kick', kickPitchSemitones, setKickPitchSemitones], ['Hat', hatPitchSemitones, setHatPitchSemitones]] as const).map(([label, value, setter]) => <React.Fragment key={label}><span>{label}</span><div style={{ display: "grid", gridTemplateColumns: "32px 38px 32px", gap: 4 }}><button type="button" aria-label={`${label} pitch down`} onClick={() => setter(Math.max(-12, value - 1))}>−</button><output aria-label={`${label} pitch semitones`} style={{ textAlign: "center" }}>{value > 0 ? `+${value}` : value}</output><button type="button" aria-label={`${label} pitch up`} onClick={() => setter(Math.min(12, value + 1))}>+</button></div></React.Fragment>)}
+            </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button type="button" onClick={() => setPulseLock((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: pulseLock ? "rgba(146, 222, 185, 0.3)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Pulse Lock: {pulseLock ? "On" : "Off"}</button>
               <button type="button" onClick={() => setHoldChaos((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: holdChaos ? "rgba(255, 184, 120, 0.3)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>Hold Chaos: {holdChaos ? "On" : "Off"}</button>
