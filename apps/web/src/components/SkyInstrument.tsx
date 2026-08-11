@@ -65,8 +65,10 @@ function buildProceduralAirSignal(lat: number, lon: number, isDay: boolean): Air
 }
 
 type Pt = { x: number; y: number; pressure: number };
-type HeldSkyVoice = Pt & { frequencyHz: number };
+type HeldSkyVoice = Pt & { frequencyHz: number; voiceId: number; startedAt: number };
 type ActiveTouch = Pt & { pointerId: number; startedAt: number; voiceId: number };
+
+const MAX_SKY_VOICES = 3;
 
 const CHAOS_STEPS = 16;
 const SCALE_LABELS = ["1", "2", "♭3", "4", "5", "♭6", "♭7"];
@@ -339,6 +341,14 @@ export default function SkyInstrument({
     (x: number) => skyBaseHz * Math.pow(2, clamp01(x) * 2 - 1),
     [skyBaseHz],
   );
+  const skyPitchLabel = useCallback(
+    (frequencyHz: number) => {
+      const semitones = 12 * Math.log2(frequencyHz / skyBaseHz);
+      const rounded = Math.round(semitones * 10) / 10;
+      return `${rounded >= 0 ? "+" : ""}${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}`;
+    },
+    [skyBaseHz],
+  );
   const currentTonicHz = placeBaseHz * Math.pow(2, ((pt.x - 0.5) * 24) / 12);
   const sky = useMemo(
     () =>
@@ -574,9 +584,11 @@ export default function SkyInstrument({
       hatPitchSemitones,
       skyVoices:
         performanceMode === "sky"
-          ? Object.values(activeTouches).slice(0, 4)
+          ? Object.values(activeTouches).sort((a, b) => a.startedAt - b.startedAt).slice(0, MAX_SKY_VOICES)
           : undefined,
-      heldSkyVoices,
+      heldSkyVoices: heldSkyVoices.filter(
+        (held) => !Object.values(activeTouches).some((live) => live.voiceId === held.voiceId),
+      ),
       heldSkyReferenceHz: heldSkyReferenceHz ?? undefined,
       chaosReferenceHz: chaosReferenceHz ?? undefined,
     };
@@ -683,6 +695,11 @@ export default function SkyInstrument({
 
   async function onPointerDown(e: React.PointerEvent) {
     if (mixerOpen || !hasUnlockedAudio || !isPerformancePointerTarget(e.target)) return;
+    if (
+      performanceMode === "sky" &&
+      !activeTouches[e.pointerId] &&
+      Object.keys(activeTouches).length >= MAX_SKY_VOICES
+    ) return;
     e.preventDefault();
 
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -695,7 +712,8 @@ export default function SkyInstrument({
     setPt(nextPt);
     if (performanceMode === "sky") {
       const voiceId = nextVoiceIdRef.current++;
-      setActiveTouches((prev) => ({ ...prev, [e.pointerId]: { ...nextPt, pointerId: e.pointerId, startedAt: performance.now(), voiceId } }));
+      const touch = { ...nextPt, pointerId: e.pointerId, startedAt: performance.now(), voiceId };
+      setActiveTouches((previous) => ({ ...previous, [e.pointerId]: touch }));
       if (!skyHold) {
         setHeldSkyVoices([]);
         setHeldSkyReferenceHz(null);
@@ -717,7 +735,11 @@ export default function SkyInstrument({
     const nextPt = { x, y, pressure };
     setPt(nextPt);
     if (performanceMode === "sky") {
-      setActiveTouches((prev) => (prev[e.pointerId] ? { ...prev, [e.pointerId]: { ...prev[e.pointerId], ...nextPt } } : prev));
+      setActiveTouches((previous) =>
+        previous[e.pointerId]
+          ? { ...previous, [e.pointerId]: { ...previous[e.pointerId], ...nextPt } }
+          : previous,
+      );
     } else {
       setChaosScaleDegree(chaosDegreeFromX(x));
     }
@@ -728,21 +750,25 @@ export default function SkyInstrument({
     if (mixerOpen || !hasUnlockedAudio) return;
     e.preventDefault();
     const { x, y } = getXY(e);
-    const remainingTouchCount = Math.max(0, Object.keys(activeTouches).length - (activeTouches[e.pointerId] ? 1 : 0));
+    const releasedTouch = activeTouches[e.pointerId];
+    const remainingTouchCount = Math.max(0, Object.keys(activeTouches).length - (releasedTouch ? 1 : 0));
     setIsDragging(remainingTouchCount > 0);
     setPt((p) => ({ ...p, x, y, pressure: dronePressure }));
     if (performanceMode === "sky") {
-      setActiveTouches((prev) => {
-        const next = { ...prev };
+      setActiveTouches((previous) => {
+        const next = { ...previous };
         delete next[e.pointerId];
         return next;
       });
       if (skyHold) {
         setHeldSkyVoices((prev) => {
-          const src = activeTouches[e.pointerId] ?? { x, y, pressure: dronePressure };
-          const heldVoice = { ...src, frequencyHz: skyPitchHzFromX(src.x) };
-          setHeldSkyReferenceHz(heldVoice.frequencyHz);
-          return [...prev, heldVoice].slice(-4);
+          if (!releasedTouch) return prev;
+          const heldVoice = { ...releasedTouch, frequencyHz: skyPitchHzFromX(releasedTouch.x) };
+          const next = [...prev.filter((voice) => voice.voiceId !== heldVoice.voiceId), heldVoice]
+            .sort((a, b) => a.startedAt - b.startedAt)
+            .slice(0, MAX_SKY_VOICES);
+          setHeldSkyReferenceHz(next[0]?.frequencyHz ?? null);
+          return next;
         });
       }
     }
@@ -751,13 +777,7 @@ export default function SkyInstrument({
 
   function onPointerLeave() {
     if (!hasUnlockedAudio) return;
-    setIsDragging(false);
     setPt((p) => ({ ...p, pressure: dronePressure }));
-    if (performanceMode === "sky" && !skyHold) {
-      setActiveTouches({});
-      setHeldSkyVoices([]);
-      setHeldSkyReferenceHz(null);
-    }
     update(audioParams({ ...pt, pressure: dronePressure }));
   }
 
@@ -1133,8 +1153,9 @@ export default function SkyInstrument({
             e.stopPropagation();
             setPerformanceMode((mode) => {
               if (mode === "sky") {
-                const latestHeldPitchHz = heldSkyVoices[heldSkyVoices.length - 1]?.frequencyHz;
-                setChaosReferenceHz(latestHeldPitchHz ?? skyBaseHz);
+                // The oldest latched voice is the stable Chaos tonic; the full
+                // Sky chord remains untouched as independent held harmony.
+                setChaosReferenceHz(heldSkyVoices[0]?.frequencyHz ?? skyBaseHz);
               }
               return mode === "sky" ? "chaos" : "sky";
             });
@@ -1159,13 +1180,26 @@ export default function SkyInstrument({
           <button type="button" disabled={octaveShift === 2} onClick={() => setOctaveShift((value) => Math.min(2, value + 1) as typeof value)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave up">Octave +</button>
         </div>
         {performanceMode === "sky" && (
-          <button type="button" onClick={() => setSkyHold((v) => !v)} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: skyHold ? "rgba(140, 210, 255, 0.32)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+          <button type="button" onClick={() => setSkyHold((enabled) => {
+            const nextEnabled = !enabled;
+            if (nextEnabled) {
+              const chord = Object.values(activeTouches)
+                .sort((a, b) => a.startedAt - b.startedAt)
+                .slice(0, MAX_SKY_VOICES)
+                .map((voice) => ({ ...voice, frequencyHz: skyPitchHzFromX(voice.x) }));
+              if (chord.length) {
+                setHeldSkyVoices(chord);
+                setHeldSkyReferenceHz(chord[0].frequencyHz);
+              }
+            }
+            return nextEnabled;
+          })} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: skyHold ? "rgba(140, 210, 255, 0.32)" : "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
             Latch Drone: {skyHold ? "On" : "Off"}
           </button>
         )}
         {performanceMode === "sky" && skyHold && (
           <button type="button" onClick={() => { setHeldSkyVoices([]); setHeldSkyReferenceHz(null); }} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11 }}>
-            Clear Drone
+            Clear Latch
           </button>
         )}
         <button
@@ -1464,24 +1498,52 @@ export default function SkyInstrument({
           </div>
         </div>
       )}
-      <div
-        style={{
-          position: "absolute",
-          left: `calc(${pt.x * 100}% - 20px)`,
-          top: `calc(${pt.y * 100}% - 20px)`,
-          width: 40,
-          height: 40,
-          borderRadius: 999,
-          background: "rgba(180, 220, 255, 0.85)",
-          filter: "blur(0px)",
-          boxShadow: "0 0 40px rgba(140,200,255,0.35)",
-          transform: `scale(${1 + pt.pressure * 0.8})`,
-          transition: "transform 40ms linear",
-          pointerEvents: "none",
-          opacity: mixerOpen ? 0.35 : 0.9,
-          zIndex: 1,
-        }}
-      />
+      {performanceMode === "sky" && !shouldShowSplash && [
+        ...heldSkyVoices
+          .filter((held) => !Object.values(activeTouches).some((live) => live.voiceId === held.voiceId))
+          .map((voice) => ({ ...voice, held: true, key: `held-${voice.voiceId}` })),
+        ...Object.values(activeTouches)
+          .sort((a, b) => a.startedAt - b.startedAt)
+          .slice(0, MAX_SKY_VOICES)
+          .map((voice) => ({ ...voice, frequencyHz: skyPitchHzFromX(voice.x), held: false, key: `live-${voice.voiceId}` })),
+      ].map((voice, index) => (
+        <div
+          key={voice.key}
+          aria-label={`${voice.held ? "Held" : "Live"} Sky voice ${skyPitchLabel(voice.frequencyHz)} semitones`}
+          style={{
+            position: "absolute",
+            left: `calc(${voice.x * 100}% - 19px)`,
+            top: `calc(${voice.y * 100}% - 19px)`,
+            width: 38,
+            height: 38,
+            borderRadius: 999,
+            border: voice.held ? "2px solid rgba(210, 235, 255, 0.72)" : "1px solid rgba(235, 247, 255, 0.72)",
+            background: voice.held ? "rgba(150, 205, 255, 0.12)" : "rgba(180, 220, 255, 0.78)",
+            boxShadow: voice.held ? "0 0 24px rgba(120,185,255,0.24), inset 0 0 12px rgba(190,225,255,0.12)" : "0 0 34px rgba(140,200,255,0.38)",
+            transform: `scale(${voice.held ? 1 : 1 + voice.pressure * (index === 0 ? 0.55 : 0.4)})`,
+            transition: "left 35ms linear, top 35ms linear, transform 45ms linear, opacity 120ms ease",
+            pointerEvents: "none",
+            opacity: mixerOpen ? 0.3 : voice.held ? 0.7 : index === 0 ? 0.95 : 0.82,
+            zIndex: 2,
+          }}
+        >
+          <span style={{
+            position: "absolute",
+            left: "50%",
+            top: "calc(100% + 7px)",
+            transform: "translateX(-50%)",
+            minWidth: 30,
+            padding: "2px 5px",
+            borderRadius: 999,
+            background: "rgba(5, 12, 28, 0.58)",
+            color: "rgba(242, 248, 255, 0.94)",
+            font: "600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+            textShadow: "0 1px 3px rgba(0,0,0,.7)",
+          }}>{skyPitchLabel(voice.frequencyHz)}{voice.held ? " ·" : ""}</span>
+        </div>
+      ))}
 
       {mixerOpen && activePage && (
         <div

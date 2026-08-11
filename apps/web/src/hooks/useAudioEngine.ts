@@ -91,6 +91,7 @@ export function useAudioEngine() {
   const octaveRef = useRef<OscillatorNode | null>(null);
   const heldSkyOscillatorsRef = useRef<OscillatorNode[]>([]);
   const heldSkyGainsRef = useRef<GainNode[]>([]);
+  const liveSkyGainsRef = useRef<GainNode[]>([]);
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airNoiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airToneRef = useRef<OscillatorNode | null>(null);
@@ -181,6 +182,7 @@ export function useAudioEngine() {
     octaveRef.current = null;
     heldSkyOscillatorsRef.current = [];
     heldSkyGainsRef.current = [];
+    liveSkyGainsRef.current = [];
     noiseSrcRef.current = null;
     airNoiseSrcRef.current = null;
     airToneRef.current = null;
@@ -364,6 +366,7 @@ export function useAudioEngine() {
     fifthGain.gain.value = 0.18;
     const octaveGain = ctx.createGain();
     octaveGain.gain.value = 0.08;
+    liveSkyGainsRef.current = [rootGain, fifthGain, octaveGain];
     const heldSkyOscillators = Array.from({ length: 4 }, () => ctx.createOscillator());
     const heldSkyGains = heldSkyOscillators.map(() => ctx.createGain());
     heldSkyOscillators.forEach((oscillator, index) => {
@@ -1003,11 +1006,26 @@ export function useAudioEngine() {
     rootRef.current?.frequency.setTargetAtTime(rootHz, now, 0.04);
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
+    // The original three oscillators used fixed harmonic gains (.45/.18/.08).
+    // Once reassigned to separate touches, that made every added pitch much
+    // quieter than the first. For polyphony, give each real voice a conservative
+    // equal-power share and ramp it so chord-size changes do not pump or click.
+    if (!isChaosPerformance && voices.length > 1) {
+      const perVoiceGain = 0.48 / Math.sqrt(Math.min(voices.length, 3));
+      liveSkyGainsRef.current.forEach((gain, index) => {
+        gain.gain.setTargetAtTime(index < voices.length ? perVoiceGain : 0, now, 0.055);
+      });
+    } else {
+      [0.45, 0.18, 0.08].forEach((gainValue, index) => {
+        liveSkyGainsRef.current[index]?.gain.setTargetAtTime(gainValue, now, 0.055);
+      });
+    }
     const heldVoices = p.heldSkyVoices ?? [];
+    const heldPerVoiceGain = heldVoices.length ? 0.16 / Math.sqrt(Math.min(heldVoices.length, 3)) : 0;
     heldSkyOscillatorsRef.current.forEach((oscillator, index) => {
       const voice = heldVoices[index];
       if (voice) oscillator.frequency.setTargetAtTime(voice.frequencyHz ?? voiceHz(voice.x), now, 0.04);
-      heldSkyGainsRef.current[index]?.gain.setTargetAtTime(voice ? 0.1 : 0, now, 0.06);
+      heldSkyGainsRef.current[index]?.gain.setTargetAtTime(voice ? heldPerVoiceGain : 0, now, 0.075);
     });
 
     const windMainCutoffMod = clamp(1 - windInfluence * 0.16 + harmonicExposure * 0.1, 0.72, 1.2);

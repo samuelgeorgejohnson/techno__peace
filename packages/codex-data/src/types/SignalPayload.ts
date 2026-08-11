@@ -59,7 +59,7 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   skyVoices?: Array<{ x: number; y: number; pressure: number }>;
   /** Latched Sky voices, kept independent from the currently selected performance mode. */
   heldSkyVoices?: Array<{ x: number; y: number; pressure: number; frequencyHz?: number }>;
-  /** Exact latched Sky pitch used as Chaos's tonic; absent means use the place tonic. */
+  /** Oldest latched Sky pitch used as Chaos's tonic; other held voices remain harmony. */
   heldSkyReferenceHz?: number;
   /** Stable Chaos tonic captured on entry, independent of subsequent live Sky gestures. */
   chaosReferenceHz?: number;
