@@ -35,7 +35,9 @@ export function triggerChaosHiHat(
   bandpass.frequency.setValueAtTime(clamp(7600 * pitchRatio, 3800, 14500), startTime);
   bandpass.Q.setValueAtTime(accented ? 0.85 : 0.7, startTime);
   envelope.gain.setValueAtTime(0.0001, startTime);
-  envelope.gain.exponentialRampToValueAtTime(accented ? 0.24 : 0.18, startTime + 0.002);
+  // Compensate for the dedicated hat's downstream Chaos and master bus gain.
+  // Keep this local to the transient so the continuous Chaos noise stays quiet.
+  envelope.gain.exponentialRampToValueAtTime(accented ? 0.64 : 0.48, startTime + 0.002);
   envelope.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
   source.connect(highpass);
