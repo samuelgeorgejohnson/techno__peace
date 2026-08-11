@@ -9,6 +9,49 @@ function fractional(x: number) {
   return x - Math.floor(x);
 }
 
+/** Synthesize one short, bright closed hi-hat into the Chaos percussion bus. */
+export function triggerChaosHiHat(
+  ctx: AudioContext,
+  destination: AudioNode,
+  startTime: number,
+  pitchSemitones = 0,
+  accented = false,
+) {
+  const duration = accented ? 0.085 : 0.065;
+  const source = ctx.createBufferSource();
+  const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
+  const samples = buffer.getChannelData(0);
+  for (let i = 0; i < samples.length; i += 1) samples[i] = Math.random() * 2 - 1;
+  source.buffer = buffer;
+
+  const highpass = ctx.createBiquadFilter();
+  const bandpass = ctx.createBiquadFilter();
+  const envelope = ctx.createGain();
+  const pitchRatio = Math.pow(2, clamp(pitchSemitones, -12, 12) / 12);
+  highpass.type = "highpass";
+  highpass.frequency.setValueAtTime(clamp(4200 * pitchRatio, 2100, 8400), startTime);
+  highpass.Q.setValueAtTime(0.7, startTime);
+  bandpass.type = "bandpass";
+  bandpass.frequency.setValueAtTime(clamp(7600 * pitchRatio, 3800, 14500), startTime);
+  bandpass.Q.setValueAtTime(accented ? 0.85 : 0.7, startTime);
+  envelope.gain.setValueAtTime(0.0001, startTime);
+  envelope.gain.exponentialRampToValueAtTime(accented ? 0.24 : 0.18, startTime + 0.002);
+  envelope.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  source.connect(highpass);
+  highpass.connect(bandpass);
+  bandpass.connect(envelope);
+  envelope.connect(destination);
+  source.onended = () => {
+    source.disconnect();
+    highpass.disconnect();
+    bandpass.disconnect();
+    envelope.disconnect();
+  };
+  source.start(startTime);
+  source.stop(startTime + duration + 0.005);
+}
+
 export function derivePlaceBaseFrequency(latitude: number, longitude: number) {
   const lat = clamp((latitude + 90) / 180);
   const lon = clamp((longitude + 180) / 360);
@@ -894,25 +937,13 @@ export function useAudioEngine() {
         }
 
         if (isHatStep) {
-          const hatNoise = ctx.createBufferSource();
-          const hatBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.03), ctx.sampleRate);
-          const hatData = hatBuffer.getChannelData(0);
-          for (let i = 0; i < hatData.length; i += 1) hatData[i] = (Math.random() * 2 - 1) * (1 - i / hatData.length);
-          hatNoise.buffer = hatBuffer;
-          const hatGain = ctx.createGain();
-          const hatFilter = ctx.createBiquadFilter();
-          const accent = laneAccent("hat") ? 1.25 : 1;
-          hatFilter.type = "bandpass";
-          const hatRatio = Math.pow(2, clamp(p.hatPitchSemitones ?? 0, -12, 12) / 12);
-          hatFilter.frequency.setValueAtTime(clamp((4800 + windNorm * 700 - humidityNorm * 300) * hatRatio, 700, 12000), stepTime);
-          hatFilter.Q.setValueAtTime(0.9, stepTime);
-          hatGain.gain.setValueAtTime(0.0001, stepTime);
-          hatGain.gain.exponentialRampToValueAtTime((0.02 + 0.02 * pressure + 0.012 * windNorm) * accent, stepTime + 0.003);
-          hatGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.05);
-          hatNoise.connect(hatFilter);
-          hatFilter.connect(hatGain);
-          hatGain.connect(chaosHatGainRef.current);
-          hatNoise.start(stepTime);
+          triggerChaosHiHat(
+            ctx,
+            chaosHatGainRef.current,
+            stepTime,
+            p.hatPitchSemitones ?? 0,
+            laneAccent("hat"),
+          );
         }
 
         if (chaosDuckGainRef.current && isKickStep && p.pulseLock) {
@@ -1036,7 +1067,8 @@ export function useAudioEngine() {
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
     airGainRef.current?.gain.setTargetAtTime(airLayerMix * gate(monitorState.air), now, 0.16);
     trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain * gate(monitorState.traffic), now, 0.2);
-    chaosGainRef.current?.gain.setTargetAtTime(chaosMix * gate(monitorState.traffic), now, 0.08);
+    // Chaos percussion is an instrument output, not part of the traffic monitor.
+    chaosGainRef.current?.gain.setTargetAtTime(chaosMix, now, 0.08);
     chaosNoiseGainRef.current?.gain.setTargetAtTime(chaosHatNoiseMix, now, 0.08);
     chaosKickGainRef.current?.gain.setTargetAtTime(chaosKickMix, now, 0.04);
     chaosHatGainRef.current?.gain.setTargetAtTime(chaosHatMix, now, 0.04);
