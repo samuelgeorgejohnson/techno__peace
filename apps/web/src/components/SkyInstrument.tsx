@@ -65,6 +65,7 @@ function buildProceduralAirSignal(lat: number, lon: number, isDay: boolean): Air
 }
 
 type Pt = { x: number; y: number; pressure: number };
+type HeldSkyVoice = Pt & { frequencyHz: number };
 type ActiveTouch = Pt & { pointerId: number; startedAt: number; voiceId: number };
 
 const CHAOS_STEPS = 16;
@@ -223,7 +224,9 @@ export default function SkyInstrument({
   const [holdChaos, setHoldChaos] = useState(false);
   const [skyHold, setSkyHold] = useState(false);
   const [activeTouches, setActiveTouches] = useState<Record<number, ActiveTouch>>({});
-  const [heldSkyVoices, setHeldSkyVoices] = useState<Pt[]>([]);
+  const [heldSkyVoices, setHeldSkyVoices] = useState<HeldSkyVoice[]>([]);
+  const [heldSkyReferenceHz, setHeldSkyReferenceHz] = useState<number | null>(null);
+  const [chaosReferenceHz, setChaosReferenceHz] = useState<number | null>(null);
   const [octaveShift, setOctaveShift] = useState<-2 | -1 | 0 | 1 | 2>(0);
   const [chaosScaleDegree, setChaosScaleDegree] = useState(0);
   const [chaosBassSequence, setChaosBassSequence] = useState<number[]>([]);
@@ -330,6 +333,11 @@ export default function SkyInstrument({
   const placeBaseHz = useMemo(
     () => derivePlaceBaseFrequency(weather.latitude, weather.longitude),
     [weather.latitude, weather.longitude],
+  );
+  const skyBaseHz = placeBaseHz * Math.pow(2, octaveShift);
+  const skyPitchHzFromX = useCallback(
+    (x: number) => skyBaseHz * Math.pow(2, clamp01(x) * 2 - 1),
+    [skyBaseHz],
   );
   const currentTonicHz = placeBaseHz * Math.pow(2, ((pt.x - 0.5) * 24) / 12);
   const sky = useMemo(
@@ -569,8 +577,10 @@ export default function SkyInstrument({
           ? Object.values(activeTouches).slice(0, 4)
           : undefined,
       heldSkyVoices,
+      heldSkyReferenceHz: heldSkyReferenceHz ?? undefined,
+      chaosReferenceHz: chaosReferenceHz ?? undefined,
     };
-  }, [activeTouches, birdsMix, chaosBassSequence, chaosPattern, chaosScaleDegree, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, hatPitchSemitones, heldSkyVoices, holdChaos, kickPitchSemitones, manMadeAir.road, manMadeMix.air, octaveShift, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [activeTouches, birdsMix, chaosBassSequence, chaosPattern, chaosReferenceHz, chaosScaleDegree, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, hatPitchSemitones, heldSkyReferenceHz, heldSkyVoices, holdChaos, kickPitchSemitones, manMadeAir.road, manMadeMix.air, octaveShift, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -686,7 +696,10 @@ export default function SkyInstrument({
     if (performanceMode === "sky") {
       const voiceId = nextVoiceIdRef.current++;
       setActiveTouches((prev) => ({ ...prev, [e.pointerId]: { ...nextPt, pointerId: e.pointerId, startedAt: performance.now(), voiceId } }));
-      if (!skyHold) setHeldSkyVoices([]);
+      if (!skyHold) {
+        setHeldSkyVoices([]);
+        setHeldSkyReferenceHz(null);
+      }
     } else {
       setChaosScaleDegree(chaosDegreeFromX(x));
     }
@@ -727,7 +740,9 @@ export default function SkyInstrument({
       if (skyHold) {
         setHeldSkyVoices((prev) => {
           const src = activeTouches[e.pointerId] ?? { x, y, pressure: dronePressure };
-          return [...prev, src].slice(-4);
+          const heldVoice = { ...src, frequencyHz: skyPitchHzFromX(src.x) };
+          setHeldSkyReferenceHz(heldVoice.frequencyHz);
+          return [...prev, heldVoice].slice(-4);
         });
       }
     }
@@ -741,6 +756,7 @@ export default function SkyInstrument({
     if (performanceMode === "sky" && !skyHold) {
       setActiveTouches({});
       setHeldSkyVoices([]);
+      setHeldSkyReferenceHz(null);
     }
     update(audioParams({ ...pt, pressure: dronePressure }));
   }
@@ -1115,7 +1131,13 @@ export default function SkyInstrument({
           onPointerUp={stopMixerEvent}
           onClick={(e) => {
             e.stopPropagation();
-            setPerformanceMode((mode) => (mode === "sky" ? "chaos" : "sky"));
+            setPerformanceMode((mode) => {
+              if (mode === "sky") {
+                const latestHeldPitchHz = heldSkyVoices[heldSkyVoices.length - 1]?.frequencyHz;
+                setChaosReferenceHz(latestHeldPitchHz ?? skyBaseHz);
+              }
+              return mode === "sky" ? "chaos" : "sky";
+            });
           }}
           style={{
             borderRadius: 10,
@@ -1142,7 +1164,7 @@ export default function SkyInstrument({
           </button>
         )}
         {performanceMode === "sky" && skyHold && (
-          <button type="button" onClick={() => setHeldSkyVoices([])} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11 }}>
+          <button type="button" onClick={() => { setHeldSkyVoices([]); setHeldSkyReferenceHz(null); }} style={{ borderRadius: 10, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "8px 10px", cursor: "pointer", fontSize: 11 }}>
             Clear Drone
           </button>
         )}

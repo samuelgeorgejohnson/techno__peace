@@ -664,7 +664,12 @@ export function useAudioEngine() {
     const scaleSteps = [0, 2, 3, 5, 7, 8, 10];
     const chaosDegree = clamp(Math.round(p.chaosScaleDegree ?? 0), 0, 13);
     const chaosDegreeSemitones = scaleSteps[chaosDegree % scaleSteps.length] + Math.floor(chaosDegree / scaleSteps.length) * 12;
-    const pitchHz = (isChaosPerformance ? effectiveBaseHz * Math.pow(2, chaosDegreeSemitones / 12) : effectiveBaseHz * Math.pow(2, octaveOffset));
+    // Live Sky, the latched Sky drone, and both Chaos note domains deliberately
+    // have separate sources. In particular, Chaos state must never quantize Sky X.
+    const liveSkyPitchHz = effectiveBaseHz * Math.pow(2, octaveOffset);
+    const chaosReferenceHz = p.chaosReferenceHz ?? p.heldSkyReferenceHz ?? effectiveBaseHz;
+    const chaosPlayableNoteHz = chaosReferenceHz * Math.pow(2, chaosDegreeSemitones / 12);
+    const pitchHz = isChaosPerformance ? chaosPlayableNoteHz : liveSkyPitchHz;
 
     const subHz = pitchHz / 2;
     const infraRootHz = effectiveBaseHz;
@@ -673,12 +678,7 @@ export function useAudioEngine() {
     let rootHz = pitchHz;
     let fifthHz = pitchHz * 1.5;
     let octaveHz = pitchHz * 2;
-    const voiceHz = (vx: number) => {
-      const steps = [0, 2, 4, 7, 9];
-      const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
-      const octave = Math.floor(clamp(vx) * 2);
-      return effectiveBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
-    };
+    const voiceHz = (vx: number) => effectiveBaseHz * Math.pow(2, (clamp(vx) - 0.5) * 2);
     const voices = p.skyVoices ?? [];
     if ((p.performanceMode ?? "sky") === "sky" && voices.length > 1) {
       rootHz = voiceHz(voices[0]?.x ?? 0.5);
@@ -773,8 +773,8 @@ export function useAudioEngine() {
     const chaosTempoBpm = clamp(p.chaosTempoBpm ?? 100, 60, 160);
     const chaosStepSeconds = 60 / chaosTempoBpm / 4;
     const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
-    const chaosBassRootHz = effectiveBaseHz / 2;
-    const chaosBassSubHz = effectiveBaseHz / 4;
+    const chaosBassRootHz = chaosReferenceHz / 2;
+    const chaosBassSubHz = chaosReferenceHz / 4;
     const chaosBassHz = clamp(chaosBassRootHz, 32, 120);
     const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
     const chaosDrive = clamp(0.2 + pressure * 0.8, 0.2, 1);
@@ -1006,7 +1006,7 @@ export function useAudioEngine() {
     const heldVoices = p.heldSkyVoices ?? [];
     heldSkyOscillatorsRef.current.forEach((oscillator, index) => {
       const voice = heldVoices[index];
-      if (voice) oscillator.frequency.setTargetAtTime(voiceHz(voice.x), now, 0.04);
+      if (voice) oscillator.frequency.setTargetAtTime(voice.frequencyHz ?? voiceHz(voice.x), now, 0.04);
       heldSkyGainsRef.current[index]?.gain.setTargetAtTime(voice ? 0.1 : 0, now, 0.06);
     });
 
