@@ -1610,9 +1610,11 @@ export default function SkyInstrument({
                     min={0}
                     max={200}
                     value={mixLevels[channel.id] ?? 100}
-                    onPointerDown={stopMixerEvent}
-                    onPointerUp={stopMixerEvent}
-                    onClick={stopMixerEvent}
+                    onPointerDown={stopMixerPropagation}
+                    onPointerMove={stopMixerPropagation}
+                    onPointerUp={stopMixerPropagation}
+                    onPointerCancel={stopMixerPropagation}
+                    onClick={stopMixerPropagation}
                     onChange={(e) =>
                       updateChannelLevel(channel.id, Number(e.currentTarget.value))
                     }
