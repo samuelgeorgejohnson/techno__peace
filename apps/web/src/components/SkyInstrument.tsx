@@ -198,6 +198,7 @@ export default function SkyInstrument({
   onRequestLocation,
 }: SkyInstrumentProps) {
   const elRef = useRef<HTMLDivElement | null>(null);
+  const hudRef = useRef<HTMLDivElement | null>(null);
   const fadeFrameRef = useRef<number | null>(null);
   const chaosLongPressTimersRef = useRef<Map<number, number>>(new Map());
   const chaosLongPressConsumedRef = useRef<Set<string>>(new Set());
@@ -228,11 +229,27 @@ export default function SkyInstrument({
   const [chaosBassSequence, setChaosBassSequence] = useState<number[]>([]);
   const [kickPitchSemitones, setKickPitchSemitones] = useState(0);
   const [hatPitchSemitones, setHatPitchSemitones] = useState(0);
+  const [hudBottom, setHudBottom] = useState(0);
   const nextVoiceIdRef = useRef(1);
   const latestPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
+
+  useEffect(() => {
+    const root = elRef.current;
+    const hud = hudRef.current;
+    if (!root || !hud) return;
+    const measureHud = () => setHudBottom(Math.ceil(hud.getBoundingClientRect().bottom - root.getBoundingClientRect().top));
+    measureHud();
+    const observer = new ResizeObserver(measureHud);
+    observer.observe(hud);
+    window.addEventListener("resize", measureHud);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measureHud);
+    };
+  }, []);
   const dronePressure = 0.58;
   const activePage = useMemo(
     () => initialMixerPages.find((page) => page.id === activePageId) ?? initialMixerPages[0],
@@ -1029,6 +1046,7 @@ export default function SkyInstrument({
       </a>
 
       <div
+        ref={hudRef}
         data-sky-control="true"
         onPointerDown={stopMixerEvent}
         onPointerMove={stopMixerEvent}
@@ -1669,6 +1687,9 @@ export default function SkyInstrument({
             position: "absolute",
             left: `max(10px, calc(${safeInsetLeft} + 8px))`,
             right: `max(10px, calc(${safeInsetRight} + 8px))`,
+            top: isMobileViewport
+              ? (hudBottom ? `${hudBottom + 10}px` : `max(172px, calc(${safeInsetTop} + 162px))`)
+              : undefined,
             bottom: `max(68px, calc(${safeInsetBottom} + 54px))`,
             zIndex: 5,
             display: "flex",
@@ -1695,6 +1716,10 @@ export default function SkyInstrument({
               gap: 10,
               opacity: 0.97,
               pointerEvents: "auto",
+              maxHeight: "100%",
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              WebkitOverflowScrolling: "touch",
             }}
           >
             <div
