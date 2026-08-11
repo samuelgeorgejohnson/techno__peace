@@ -108,6 +108,7 @@ export function useAudioEngine() {
   const nextTrafficEventRef = useRef(0);
   const nextChaosPulseRef = useRef(0);
   const chaosStepRef = useRef(0);
+  const chaosBassSequenceStepRef = useRef(0);
   const chaosStepsRef = useRef(16);
 
   const startedRef = useRef(false);
@@ -195,6 +196,7 @@ export function useAudioEngine() {
     nextTrafficEventRef.current = 0;
     nextChaosPulseRef.current = 0;
     chaosStepRef.current = 0;
+    chaosBassSequenceStepRef.current = 0;
     chaosStepsRef.current = 16;
     startedRef.current = false;
   }
@@ -595,13 +597,17 @@ export function useAudioEngine() {
     const trafficReliable = p.trafficReliable === true;
 
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
+    const effectiveBaseHz = placeBaseHz * Math.pow(2, clamp(p.octaveShift ?? 0, -2, 2));
     const octaveOffset = (x - 0.5) * 2;
-    const pitchHz = placeBaseHz * Math.pow(2, octaveOffset);
+    const scaleSteps = [0, 2, 3, 5, 7, 8, 10];
+    const chaosDegree = clamp(Math.round(p.chaosScaleDegree ?? 0), 0, 13);
+    const chaosDegreeSemitones = scaleSteps[chaosDegree % scaleSteps.length] + Math.floor(chaosDegree / scaleSteps.length) * 12;
+    const pitchHz = (isChaosMode ? effectiveBaseHz * Math.pow(2, chaosDegreeSemitones / 12) : effectiveBaseHz * Math.pow(2, octaveOffset));
 
     const subHz = pitchHz / 2;
-    const infraRootHz = placeBaseHz;
-    const infraOctaveHz = placeBaseHz / 2;
-    const infraSubOctaveHz = placeBaseHz / 4;
+    const infraRootHz = effectiveBaseHz;
+    const infraOctaveHz = effectiveBaseHz / 2;
+    const infraSubOctaveHz = effectiveBaseHz / 4;
     let rootHz = pitchHz;
     let fifthHz = pitchHz * 1.5;
     let octaveHz = pitchHz * 2;
@@ -611,7 +617,7 @@ export function useAudioEngine() {
       const voiceHz = (vx: number) => {
         const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
         const octave = Math.floor(clamp(vx) * 2);
-        return placeBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
+        return effectiveBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
       };
       rootHz = voiceHz(voices[0]?.x ?? 0.5);
       fifthHz = voiceHz(voices[1]?.x ?? voices[0]?.x ?? 0.5);
@@ -705,8 +711,8 @@ export function useAudioEngine() {
     const chaosTempoBpm = clamp(p.chaosTempoBpm ?? 100, 60, 160);
     const chaosStepSeconds = 60 / chaosTempoBpm / 4;
     const chaosSwing = clamp((trafficDensityColor - 0.5) * 0.06, -0.03, 0.03);
-    const chaosBassRootHz = placeBaseHz / 2;
-    const chaosBassSubHz = placeBaseHz / 4;
+    const chaosBassRootHz = effectiveBaseHz / 2;
+    const chaosBassSubHz = effectiveBaseHz / 4;
     const chaosBassHz = clamp(chaosBassRootHz, 32, 120);
     const chaosBrightness = clamp(520 + Math.pow(1 - y, 2.1) * 5200, 450, 6000);
     const chaosDrive = clamp(0.2 + pressure * 0.8, 0.2, 1);
@@ -844,8 +850,9 @@ export function useAudioEngine() {
           const kickGain = ctx.createGain();
           const accent = laneAccent("kick") ? 1.3 : 1;
           kick.type = pressure > 0.6 ? "triangle" : "sine";
-          kick.frequency.setValueAtTime(chaosBassRootHz * 2.1, stepTime);
-          kick.frequency.exponentialRampToValueAtTime(Math.max(28, chaosBassSubHz * 1.15), stepTime + 0.11);
+          const kickRatio = Math.pow(2, clamp(p.kickPitchSemitones ?? 0, -12, 12) / 12);
+          kick.frequency.setValueAtTime(chaosBassRootHz * 2.1 * kickRatio, stepTime);
+          kick.frequency.exponentialRampToValueAtTime(Math.max(20, chaosBassSubHz * 1.15 * kickRatio), stepTime + 0.11);
           kickGain.gain.setValueAtTime(0.0001, stepTime);
           kickGain.gain.exponentialRampToValueAtTime((0.08 + 0.08 * chaosDrive) * accent, stepTime + 0.01);
           kickGain.gain.exponentialRampToValueAtTime(0.0001, stepTime + 0.16);
@@ -863,8 +870,13 @@ export function useAudioEngine() {
           const accent = laneAccent("bass") ? 1.35 : 1;
           bass.type = "sawtooth";
           bassSub.type = "sine";
-          bass.frequency.setValueAtTime(chaosBassRootHz, stepTime);
-          bassSub.frequency.setValueAtTime(chaosBassSubHz, stepTime);
+          const bassSequence = p.chaosBassSequence?.length ? p.chaosBassSequence : [0];
+          const bassDegree = bassSequence[chaosBassSequenceStepRef.current % bassSequence.length] ?? 0;
+          const bassSemitones = scaleSteps[((bassDegree % 7) + 7) % 7] + Math.floor(bassDegree / 7) * 12;
+          const bassHz = chaosBassRootHz * Math.pow(2, bassSemitones / 12);
+          bass.frequency.setValueAtTime(bassHz, stepTime);
+          bassSub.frequency.setValueAtTime(bassHz / 2, stepTime);
+          chaosBassSequenceStepRef.current += 1;
           bassFilter.type = "lowpass";
           bassFilter.frequency.setValueAtTime(clamp(120 + (1 - y) * 140, 90, 260), stepTime);
           bassFilter.Q.setValueAtTime(0.72, stepTime);
@@ -891,7 +903,8 @@ export function useAudioEngine() {
           const hatFilter = ctx.createBiquadFilter();
           const accent = laneAccent("hat") ? 1.25 : 1;
           hatFilter.type = "bandpass";
-          hatFilter.frequency.setValueAtTime(4800 + windNorm * 700 - humidityNorm * 300, stepTime);
+          const hatRatio = Math.pow(2, clamp(p.hatPitchSemitones ?? 0, -12, 12) / 12);
+          hatFilter.frequency.setValueAtTime(clamp((4800 + windNorm * 700 - humidityNorm * 300) * hatRatio, 700, 12000), stepTime);
           hatFilter.Q.setValueAtTime(0.9, stepTime);
           hatGain.gain.setValueAtTime(0.0001, stepTime);
           hatGain.gain.exponentialRampToValueAtTime((0.02 + 0.02 * pressure + 0.012 * windNorm) * accent, stepTime + 0.003);

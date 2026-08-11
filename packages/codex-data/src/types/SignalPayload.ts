@@ -57,6 +57,14 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   holdChaos?: boolean;
   skyHold?: boolean;
   skyVoices?: Array<{ x: number; y: number; pressure: number }>;
+  /** Performance transpose relative to the unchanged place-derived tonic. */
+  octaveShift?: -2 | -1 | 0 | 1 | 2;
+  /** Diatonic degree across the Chaos surface (0-13 = two octaves). */
+  chaosScaleDegree?: number;
+  /** Ordered diatonic degrees selected for the sequenced Chaos bass. */
+  chaosBassSequence?: number[];
+  kickPitchSemitones?: number;
+  hatPitchSemitones?: number;
 };
 
 /**
