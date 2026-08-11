@@ -89,6 +89,8 @@ export function useAudioEngine() {
   const rootRef = useRef<OscillatorNode | null>(null);
   const fifthRef = useRef<OscillatorNode | null>(null);
   const octaveRef = useRef<OscillatorNode | null>(null);
+  const heldSkyOscillatorsRef = useRef<OscillatorNode[]>([]);
+  const heldSkyGainsRef = useRef<GainNode[]>([]);
   const noiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airNoiseSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const airToneRef = useRef<OscillatorNode | null>(null);
@@ -177,6 +179,8 @@ export function useAudioEngine() {
     rootRef.current = null;
     fifthRef.current = null;
     octaveRef.current = null;
+    heldSkyOscillatorsRef.current = [];
+    heldSkyGainsRef.current = [];
     noiseSrcRef.current = null;
     airNoiseSrcRef.current = null;
     airToneRef.current = null;
@@ -360,6 +364,17 @@ export function useAudioEngine() {
     fifthGain.gain.value = 0.18;
     const octaveGain = ctx.createGain();
     octaveGain.gain.value = 0.08;
+    const heldSkyOscillators = Array.from({ length: 4 }, () => ctx.createOscillator());
+    const heldSkyGains = heldSkyOscillators.map(() => ctx.createGain());
+    heldSkyOscillators.forEach((oscillator, index) => {
+      oscillator.type = index % 2 === 0 ? "triangle" : "sine";
+      oscillator.frequency.value = 110;
+      heldSkyGains[index].gain.value = 0;
+      oscillator.connect(heldSkyGains[index]);
+      heldSkyGains[index].connect(baseFilter);
+    });
+    heldSkyOscillatorsRef.current = heldSkyOscillators;
+    heldSkyGainsRef.current = heldSkyGains;
     const infraRootGain = ctx.createGain();
     infraRootGain.gain.value = 0.085;
     const infraOctaveGain = ctx.createGain();
@@ -611,6 +626,7 @@ export function useAudioEngine() {
     root.start();
     fifth.start();
     octave.start();
+    heldSkyOscillators.forEach((oscillator) => oscillator.start());
     noiseSrc.start();
     airNoiseSrc.start();
     airTone.start();
@@ -638,7 +654,8 @@ export function useAudioEngine() {
     const chimesLevel = clamp(p.chimesLevel ?? 1, 0, 2);
     const placeDroneLevel = clamp(p.placeDroneLevel ?? 1, 0, 2);
     const airMix = clamp(p.airMix ?? 1, 0, 2);
-    const isChaosMode = p.performanceMode === "chaos" || Boolean(p.holdChaos);
+    const isChaosPerformance = p.performanceMode === "chaos";
+    const isChaosMode = isChaosPerformance || Boolean(p.holdChaos);
     const trafficReliable = p.trafficReliable === true;
 
     const placeBaseHz = derivePlaceBaseFrequency(p.latitude, p.longitude);
@@ -647,7 +664,7 @@ export function useAudioEngine() {
     const scaleSteps = [0, 2, 3, 5, 7, 8, 10];
     const chaosDegree = clamp(Math.round(p.chaosScaleDegree ?? 0), 0, 13);
     const chaosDegreeSemitones = scaleSteps[chaosDegree % scaleSteps.length] + Math.floor(chaosDegree / scaleSteps.length) * 12;
-    const pitchHz = (isChaosMode ? effectiveBaseHz * Math.pow(2, chaosDegreeSemitones / 12) : effectiveBaseHz * Math.pow(2, octaveOffset));
+    const pitchHz = (isChaosPerformance ? effectiveBaseHz * Math.pow(2, chaosDegreeSemitones / 12) : effectiveBaseHz * Math.pow(2, octaveOffset));
 
     const subHz = pitchHz / 2;
     const infraRootHz = effectiveBaseHz;
@@ -656,14 +673,14 @@ export function useAudioEngine() {
     let rootHz = pitchHz;
     let fifthHz = pitchHz * 1.5;
     let octaveHz = pitchHz * 2;
+    const voiceHz = (vx: number) => {
+      const steps = [0, 2, 4, 7, 9];
+      const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
+      const octave = Math.floor(clamp(vx) * 2);
+      return effectiveBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
+    };
     const voices = p.skyVoices ?? [];
     if ((p.performanceMode ?? "sky") === "sky" && voices.length > 1) {
-      const steps = [0, 2, 4, 7, 9];
-      const voiceHz = (vx: number) => {
-        const idx = Math.min(steps.length - 1, Math.floor(clamp(vx) * steps.length));
-        const octave = Math.floor(clamp(vx) * 2);
-        return effectiveBaseHz * Math.pow(2, (steps[idx] + octave * 12) / 12);
-      };
       rootHz = voiceHz(voices[0]?.x ?? 0.5);
       fifthHz = voiceHz(voices[1]?.x ?? voices[0]?.x ?? 0.5);
       octaveHz = voiceHz(voices[2]?.x ?? voices[voices.length - 1]?.x ?? 0.5);
@@ -986,11 +1003,17 @@ export function useAudioEngine() {
     rootRef.current?.frequency.setTargetAtTime(rootHz, now, 0.04);
     fifthRef.current?.frequency.setTargetAtTime(fifthHz, now, 0.04);
     octaveRef.current?.frequency.setTargetAtTime(octaveHz, now, 0.04);
+    const heldVoices = p.heldSkyVoices ?? [];
+    heldSkyOscillatorsRef.current.forEach((oscillator, index) => {
+      const voice = heldVoices[index];
+      if (voice) oscillator.frequency.setTargetAtTime(voiceHz(voice.x), now, 0.04);
+      heldSkyGainsRef.current[index]?.gain.setTargetAtTime(voice ? 0.1 : 0, now, 0.06);
+    });
 
     const windMainCutoffMod = clamp(1 - windInfluence * 0.16 + harmonicExposure * 0.1, 0.72, 1.2);
     const sunMainBrightness = clamp(0.95 + sunInfluence * 0.15 + harmonicExposure * 0.08, 0.9, 1.35);
     baseFilterRef.current?.frequency.setTargetAtTime(
-      isChaosMode ? chaosBrightness : baseCutoff * windMainCutoffMod * sunMainBrightness,
+      isChaosPerformance ? chaosBrightness : baseCutoff * windMainCutoffMod * sunMainBrightness,
       now,
       0.14,
     );

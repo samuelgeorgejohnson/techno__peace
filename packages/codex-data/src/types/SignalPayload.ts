@@ -57,6 +57,8 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   holdChaos?: boolean;
   skyHold?: boolean;
   skyVoices?: Array<{ x: number; y: number; pressure: number }>;
+  /** Latched Sky voices, kept independent from the currently selected performance mode. */
+  heldSkyVoices?: Array<{ x: number; y: number; pressure: number }>;
   /** Performance transpose relative to the unchanged place-derived tonic. */
   octaveShift?: -2 | -1 | 0 | 1 | 2;
   /** Diatonic degree across the Chaos surface (0-13 = two octaves). */
