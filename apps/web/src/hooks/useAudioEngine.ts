@@ -669,10 +669,14 @@ export function useAudioEngine() {
     const chaosDegreeSemitones = scaleSteps[chaosDegree % scaleSteps.length] + Math.floor(chaosDegree / scaleSteps.length) * 12;
     // Live Sky, the latched Sky drone, and both Chaos note domains deliberately
     // have separate sources. In particular, Chaos state must never quantize Sky X.
-    const liveSkyPitchHz = effectiveBaseHz * Math.pow(2, octaveOffset);
+    const liveSkyPitchHz = p.liveSkyPitchHz ?? effectiveBaseHz * Math.pow(2, octaveOffset);
     const chaosReferenceHz = p.chaosReferenceHz ?? p.heldSkyReferenceHz ?? effectiveBaseHz;
     const chaosPlayableNoteHz = chaosReferenceHz * Math.pow(2, chaosDegreeSemitones / 12);
-    const pitchHz = isChaosPerformance ? chaosPlayableNoteHz : liveSkyPitchHz;
+    // Mode selection alone preserves the inherited drone. The quantized voice
+    // takes ownership of the primary bank only after an explicit Chaos gesture.
+    const pitchHz = isChaosPerformance
+      ? (p.chaosVoiceActive ? chaosPlayableNoteHz : chaosReferenceHz)
+      : liveSkyPitchHz;
 
     const subHz = pitchHz / 2;
     const infraRootHz = effectiveBaseHz;
