@@ -63,6 +63,10 @@ export type AudioEngineSignalPayload = Omit<CurrentWeatherSignalPayload, "status
   heldSkyReferenceHz?: number;
   /** Stable Chaos tonic captured on entry, independent of subsequent live Sky gestures. */
   chaosReferenceHz?: number;
+  /** Exact live Sky pitch, retained while the Chaos pointer uses its own X domain. */
+  liveSkyPitchHz?: number;
+  /** Whether a performer gesture has intentionally selected a Chaos playable note. */
+  chaosVoiceActive?: boolean;
   /** Performance transpose relative to the unchanged place-derived tonic. */
   octaveShift?: -2 | -1 | 0 | 1 | 2;
   /** Diatonic degree across the Chaos surface (0-13 = two octaves). */

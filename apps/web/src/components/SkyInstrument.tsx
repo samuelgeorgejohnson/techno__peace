@@ -229,6 +229,7 @@ export default function SkyInstrument({
   const [heldSkyVoices, setHeldSkyVoices] = useState<HeldSkyVoice[]>([]);
   const [heldSkyReferenceHz, setHeldSkyReferenceHz] = useState<number | null>(null);
   const [chaosReferenceHz, setChaosReferenceHz] = useState<number | null>(null);
+  const [chaosVoiceActive, setChaosVoiceActive] = useState(false);
   const [octaveShift, setOctaveShift] = useState<-2 | -1 | 0 | 1 | 2>(0);
   const [chaosScaleDegree, setChaosScaleDegree] = useState(0);
   const [chaosBassSequence, setChaosBassSequence] = useState<number[]>([]);
@@ -238,6 +239,7 @@ export default function SkyInstrument({
   const [hudBottom, setHudBottom] = useState(0);
   const nextVoiceIdRef = useRef(1);
   const latestPointRef = useRef(pt);
+  const lastSkyPointRef = useRef(pt);
   const manMadeAir = useManMadeAirSignal(weather.latitude, weather.longitude);
 
   const overlayVisible = useMemo(() => !hasUnlockedAudio, [hasUnlockedAudio]);
@@ -591,8 +593,10 @@ export default function SkyInstrument({
       ),
       heldSkyReferenceHz: heldSkyReferenceHz ?? undefined,
       chaosReferenceHz: chaosReferenceHz ?? undefined,
+      liveSkyPitchHz: skyPitchHzFromX(lastSkyPointRef.current.x),
+      chaosVoiceActive,
     };
-  }, [activeTouches, birdsMix, chaosBassSequence, chaosPattern, chaosReferenceHz, chaosScaleDegree, chaosTempoBpm, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, hatPitchSemitones, heldSkyReferenceHz, heldSkyVoices, holdChaos, kickPitchSemitones, manMadeAir.road, manMadeMix.air, octaveShift, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
+  }, [activeTouches, birdsMix, chaosBassSequence, chaosPattern, chaosReferenceHz, chaosScaleDegree, chaosTempoBpm, chaosVoiceActive, chimesMix, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, hatPitchSemitones, heldSkyReferenceHz, heldSkyVoices, holdChaos, kickPitchSemitones, manMadeAir.road, manMadeMix.air, octaveShift, performanceMode, placeDroneMix, pulseLock, resolvedAirSignal, skyHold, skyPitchHzFromX, trafficReliable, weather.altitudeM, weather.cloudCover, weather.dailyRainMm, weather.isDay, weather.latitude, weather.longitude, weather.moonPhase, weather.precipitationMm, weather.sunAltitudeDeg, weather.temperatureC]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -656,6 +660,19 @@ export default function SkyInstrument({
     return Math.min(13, Math.floor(clamp01(x) * 14));
   }
 
+  function transposeOctave(direction: -1 | 1) {
+    const nextShift = Math.max(-2, Math.min(2, octaveShift + direction)) as typeof octaveShift;
+    if (nextShift === octaveShift) return;
+    const ratio = Math.pow(2, nextShift - octaveShift);
+    setOctaveShift(nextShift);
+    setHeldSkyVoices((voices) => voices.map((voice) => ({
+      ...voice,
+      frequencyHz: (voice.frequencyHz ?? skyPitchHzFromX(voice.x)) * ratio,
+    })));
+    setHeldSkyReferenceHz((frequencyHz) => frequencyHz === null ? null : frequencyHz * ratio);
+    setChaosReferenceHz((frequencyHz) => frequencyHz === null ? null : frequencyHz * ratio);
+  }
+
   async function unlockAndFadeIn() {
     if (fadeFrameRef.current !== null) {
       cancelAnimationFrame(fadeFrameRef.current);
@@ -711,6 +728,7 @@ export default function SkyInstrument({
     setIsDragging(true);
     setPt(nextPt);
     if (performanceMode === "sky") {
+      lastSkyPointRef.current = nextPt;
       const voiceId = nextVoiceIdRef.current++;
       const touch = { ...nextPt, pointerId: e.pointerId, startedAt: performance.now(), voiceId };
       setActiveTouches((previous) => ({ ...previous, [e.pointerId]: touch }));
@@ -719,6 +737,7 @@ export default function SkyInstrument({
         setHeldSkyReferenceHz(null);
       }
     } else {
+      setChaosVoiceActive(true);
       setChaosScaleDegree(chaosDegreeFromX(x));
     }
     update(audioParams({ x, y, pressure }));
@@ -735,12 +754,14 @@ export default function SkyInstrument({
     const nextPt = { x, y, pressure };
     setPt(nextPt);
     if (performanceMode === "sky") {
+      lastSkyPointRef.current = nextPt;
       setActiveTouches((previous) =>
         previous[e.pointerId]
           ? { ...previous, [e.pointerId]: { ...previous[e.pointerId], ...nextPt } }
           : previous,
       );
     } else {
+      setChaosVoiceActive(true);
       setChaosScaleDegree(chaosDegreeFromX(x));
     }
     update(audioParams({ x, y, pressure }));
@@ -1151,14 +1172,19 @@ export default function SkyInstrument({
           onPointerUp={stopMixerEvent}
           onClick={(e) => {
             e.stopPropagation();
-            setPerformanceMode((mode) => {
-              if (mode === "sky") {
-                // The oldest latched voice is the stable Chaos tonic; the full
-                // Sky chord remains untouched as independent held harmony.
-                setChaosReferenceHz(heldSkyVoices[0]?.frequencyHz ?? skyBaseHz);
-              }
-              return mode === "sky" ? "chaos" : "sky";
-            });
+            if (performanceMode === "sky") {
+              // Capture the oscillator's exact source pitch before changing the
+              // interaction domain. A stale Chaos degree remains display-only.
+              setChaosReferenceHz(
+                heldSkyVoices[0]?.frequencyHz ?? skyPitchHzFromX(lastSkyPointRef.current.x),
+              );
+              setChaosVoiceActive(false);
+              setPerformanceMode("chaos");
+            } else {
+              setChaosVoiceActive(false);
+              setPt(lastSkyPointRef.current);
+              setPerformanceMode("sky");
+            }
           }}
           style={{
             borderRadius: 10,
@@ -1175,9 +1201,9 @@ export default function SkyInstrument({
           {performanceMode === "sky" ? "Mode: Sky" : "Mode: Chaos"}
         </button>
         <div data-sky-control="true" style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 6, alignItems: "center" }}>
-          <button type="button" disabled={octaveShift === -2} onClick={() => setOctaveShift((value) => Math.max(-2, value - 1) as typeof value)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave down">Octave −</button>
+          <button type="button" disabled={octaveShift === -2} onClick={() => transposeOctave(-1)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave down">Octave −</button>
           <strong aria-live="polite" style={{ minWidth: 48, textAlign: "center", fontSize: 11 }}>OCT {octaveShift > 0 ? `+${octaveShift}` : octaveShift}</strong>
-          <button type="button" disabled={octaveShift === 2} onClick={() => setOctaveShift((value) => Math.min(2, value + 1) as typeof value)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave up">Octave +</button>
+          <button type="button" disabled={octaveShift === 2} onClick={() => transposeOctave(1)} style={{ borderRadius: 9, border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)", color: "white", padding: "7px", cursor: "pointer" }} aria-label="Octave up">Octave +</button>
         </div>
         {performanceMode === "sky" && (
           <button type="button" onClick={() => setSkyHold((enabled) => {
@@ -1855,7 +1881,7 @@ export default function SkyInstrument({
             <div style={{ display: "grid", gap: 7 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(220,234,255,.86)" }}><span>PLAYABLE SCALE · TWO OCTAVES</span><span>{SCALE_LABELS[chaosScaleDegree % 7]}{chaosScaleDegree >= 7 ? " ↑" : ""}</span></div>
               <div role="group" aria-label="Two octave Chaos scale surface" style={{ display: "grid", gridTemplateColumns: "repeat(14, 1fr)", gap: 2, height: 42, padding: 3, borderRadius: 12, overflow: "hidden", background: "linear-gradient(90deg, rgba(89,128,194,.25), rgba(226,117,122,.3))" }}>
-                {Array.from({ length: 14 }, (_, degree) => <button key={degree} type="button" aria-label={`Scale degree ${SCALE_LABELS[degree % 7]}, ${degree < 7 ? "lower" : "upper"} octave`} onPointerEnter={(e) => { if (e.buttons) setChaosScaleDegree(degree); }} onClick={() => setChaosScaleDegree(degree)} style={{ border: 0, borderRadius: 7, padding: 0, cursor: "crosshair", background: chaosScaleDegree === degree ? "rgba(255,255,255,.76)" : degree % 2 ? "rgba(255,255,255,.07)" : "rgba(150,205,255,.13)", boxShadow: chaosScaleDegree === degree ? "0 0 14px rgba(255,255,255,.55)" : "none" }} />)}
+                {Array.from({ length: 14 }, (_, degree) => <button key={degree} type="button" aria-label={`Scale degree ${SCALE_LABELS[degree % 7]}, ${degree < 7 ? "lower" : "upper"} octave`} onPointerEnter={(e) => { if (e.buttons) { setChaosVoiceActive(true); setChaosScaleDegree(degree); } }} onClick={() => { setChaosVoiceActive(true); setChaosScaleDegree(degree); }} style={{ border: 0, borderRadius: 7, padding: 0, cursor: "crosshair", background: chaosScaleDegree === degree ? "rgba(255,255,255,.76)" : degree % 2 ? "rgba(255,255,255,.07)" : "rgba(150,205,255,.13)", boxShadow: chaosScaleDegree === degree ? "0 0 14px rgba(255,255,255,.55)" : "none" }} />)}
               </div>
               <div style={{ fontSize: 11, color: "rgba(220,234,255,.86)" }}>BASS NOTES · touch order</div>
               <div role="group" aria-label="Held bass notes" style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
