@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { deriveTrafficActivity, trafficEventTiming, triggerTrafficPass } from "./trafficAudio";
 import type { AudioEngineSignalPayload, ChaosLaneId } from "@technopeace/codex-data/types/SignalPayload";
 
 function clamp(x: number, lo = 0, hi = 1) {
@@ -137,6 +138,9 @@ export function useAudioEngine() {
   const chimeFilterRef = useRef<BiquadFilterNode | null>(null);
   const chimeGainRef = useRef<GainNode | null>(null);
   const trafficFilterRef = useRef<BiquadFilterNode | null>(null);
+  const trafficBedGainRef = useRef<GainNode | null>(null);
+  const trafficPassesRef = useRef(new Set<() => void>());
+  const trafficClockRef = useRef({ hour: 0, refreshAt: 0 });
   const chaosBassFilterRef = useRef<BiquadFilterNode | null>(null);
   const chaosHatFilterRef = useRef<BiquadFilterNode | null>(null);
   const chaosNoiseGainRef = useRef<GainNode | null>(null);
@@ -227,6 +231,10 @@ export function useAudioEngine() {
     daylifeGainRef.current = null;
     chimeFilterRef.current = null;
     chimeGainRef.current = null;
+    for (const cancel of trafficPassesRef.current) cancel();
+    trafficPassesRef.current.clear();
+    trafficBedGainRef.current = null;
+    trafficClockRef.current = { hour: 0, refreshAt: 0 };
     trafficFilterRef.current = null;
     chaosBassFilterRef.current = null;
     chaosHatFilterRef.current = null;
@@ -269,6 +277,7 @@ export function useAudioEngine() {
     if (startedRef.current) {
       const ctx = ensureContext();
       if (ctx.state !== "running") await ctx.resume();
+      trafficClockRef.current.refreshAt = 0;
       setIsRunning(ctx.state === "running");
       return;
     }
@@ -509,6 +518,9 @@ export function useAudioEngine() {
     trafficFilter.frequency.value = 140;
     trafficFilter.Q.value = 0.7;
     trafficFilterRef.current = trafficFilter;
+    const trafficBedGain = ctx.createGain();
+    trafficBedGain.gain.value = 0;
+    trafficBedGainRef.current = trafficBedGain;
     const chaosBassFilter = ctx.createBiquadFilter();
     chaosBassFilter.type = "lowpass";
     chaosBassFilter.frequency.value = 220;
@@ -599,7 +611,8 @@ export function useAudioEngine() {
     chimeGain.connect(celestialGain);
 
     noiseSrc.connect(trafficFilter);
-    trafficFilter.connect(trafficGain);
+    trafficFilter.connect(trafficBedGain);
+    trafficBedGain.connect(trafficGain);
     noiseSrc.connect(chaosHatFilter);
     chaosHatFilter.connect(chaosNoiseGain);
     chaosNoiseGain.connect(chaosHatGain);
@@ -755,12 +768,6 @@ export function useAudioEngine() {
     const trafficFromPayload = p.road;
     const trafficDensityColor = clamp(trafficFromPayload?.normalized?.density ?? 0.35);
     const trafficDensity = clamp(trafficFromPayload?.normalized?.density ?? 0.2 + 0.45 * dayness);
-    const flow = clamp(trafficFromPayload?.normalized?.motion ?? 0.2 + trafficDensity * 0.7);
-    const proximity = clamp(trafficFromPayload?.normalized?.proximity ?? 0.2 + trafficDensity * 0.6);
-    const delay = clamp(0.15 + (1 - flow) * 0.18 + trafficDensity * 0.12);
-    const internalPulseRate = clamp(1.6 + pressure * 3.1 + (1 - y) * 1.2 + Math.abs(x - 0.5) * 0.8, 1.1, 6.2);
-    const pulseRate = isChaosMode ? internalPulseRate : 1 + flow * 5;
-    const trafficJitter = delay * 0.25;
     const trafficRumbleGain = clamp(
       (isChaosMode ? 0.03 + trafficDensityColor * 0.045 : trafficDensity * 0.08) * (trafficReliable || !isChaosMode ? 1 : 0.8),
       0,
@@ -878,25 +885,28 @@ export function useAudioEngine() {
       nextAirPassEventRef.current = now + (4 + (1 - airProximity) * 4) * (0.85 + Math.random() * 0.5);
     }
 
-    if (now >= nextTrafficEventRef.current && trafficFilterRef.current) {
-      if (Math.random() < 0.12 + trafficDensity * 0.5) {
-        const blip = ctx.createOscillator();
-        const blipGain = ctx.createGain();
-        const hz = 70 + Math.random() * 180;
-        const dur = 0.12 + Math.random() * 0.3;
-        const amp = clamp(0.003 + trafficDensity * 0.008 + (isChaosMode ? pressure * 0.002 : 0), 0.0025, 0.013);
-        blip.type = "sawtooth";
-        blip.frequency.setValueAtTime(hz, now);
-        blip.frequency.exponentialRampToValueAtTime(hz * (0.9 + trafficJitter), now + dur);
-        blipGain.gain.setValueAtTime(0.00001, now);
-        blipGain.gain.exponentialRampToValueAtTime(amp, now + 0.01);
-        blipGain.gain.exponentialRampToValueAtTime(0.00001, now + dur);
-        blip.connect(blipGain);
-        blipGain.connect(trafficFilterRef.current);
-        blip.start(now);
-        blip.stop(now + dur + 0.03);
+    if (now >= trafficClockRef.current.refreshAt) {
+      const localTime = new Date();
+      trafficClockRef.current = {
+        hour: localTime.getHours() + localTime.getMinutes() / 60,
+        refreshAt: now + 60,
+      };
+    }
+    const trafficActivity = deriveTrafficActivity(trafficClockRef.current.hour, p.road, trafficReliable);
+    if (nextTrafficEventRef.current === 0) {
+      nextTrafficEventRef.current = now + trafficEventTiming(trafficActivity.activity).interval;
+    }
+    if (now >= nextTrafficEventRef.current) {
+      const timing = trafficEventTiming(trafficActivity.activity);
+      const buffer = noiseSrcRef.current?.buffer;
+      if (monitorStateRef.current.traffic && trafficGainRef.current && buffer &&
+          trafficPassesRef.current.size === 0 && Math.random() < timing.probability) {
+        const cancel = triggerTrafficPass(ctx, trafficGainRef.current, buffer, now,
+          clamp(trafficActivity.proximity + (Math.random() - 0.5) * 0.16),
+          () => trafficPassesRef.current.delete(cancel));
+        trafficPassesRef.current.add(cancel);
       }
-      nextTrafficEventRef.current = now + (1 / pulseRate) * (0.8 + Math.random() * 0.9 + trafficJitter);
+      nextTrafficEventRef.current = now + timing.interval;
     }
 
     if (isChaosMode && chaosKickGainRef.current && chaosHatGainRef.current) {
@@ -1073,8 +1083,8 @@ export function useAudioEngine() {
     chimeFilterRef.current?.Q.setTargetAtTime(clamp(4.6 + chimeWind * 0.7 + chimeMoonSpace * 1.2 - precipNorm * 0.9, 3.8, 6.8), now, 0.24);
     chimeGainRef.current?.gain.setTargetAtTime(clamp(0.08 + 0.46 * chimeActivityRef.current, 0.04, 0.66), now, 0.22);
 
-    trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * proximity, 60, 170), now, 0.2);
-    trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.8 * proximity, 0.6, 1.5), now, 0.2);
+    trafficFilterRef.current?.frequency.setTargetAtTime(clamp(70 + 80 * trafficActivity.proximity, 60, 170), now, 0.2);
+    trafficFilterRef.current?.Q.setTargetAtTime(clamp(0.6 + 0.3 * trafficActivity.proximity, 0.6, 0.9), now, 0.2);
     mainSignalPostFilterRef.current?.frequency.setTargetAtTime(
       clamp(900 + 1700 * harmonicExposure + 700 * sunInfluence - 650 * atmosphericDiffusion, 800, 4700),
       now,
@@ -1113,7 +1123,9 @@ export function useAudioEngine() {
     celestialGainRef.current?.gain.setTargetAtTime(chimeLayerMix * gate(monitorState.chimes), now, 0.2);
     lifeGainRef.current?.gain.setTargetAtTime(lifeMix * gate(monitorState.birds), now, 0.2);
     airGainRef.current?.gain.setTargetAtTime(airLayerMix * gate(monitorState.air), now, 0.16);
-    trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * trafficRumbleGain * gate(monitorState.traffic), now, 0.2);
+    trafficBedGainRef.current?.gain.setTargetAtTime(
+      Math.min(trafficRumbleGain, 0.012 + trafficActivity.activity * 0.015), now, 0.2);
+    trafficGainRef.current?.gain.setTargetAtTime(trafficLayerMix * gate(monitorState.traffic), now, 0.2);
     // Chaos percussion is an instrument output, not part of the traffic monitor.
     chaosGainRef.current?.gain.setTargetAtTime(chaosMix, now, 0.08);
     chaosNoiseGainRef.current?.gain.setTargetAtTime(chaosHatNoiseMix, now, 0.08);
@@ -1135,6 +1147,8 @@ export function useAudioEngine() {
     if (!ctx) return;
 
     const now = ctx.currentTime;
+    for (const cancel of trafficPassesRef.current) cancel();
+    nextTrafficEventRef.current = 0;
     if (masterGainRef.current) {
       masterGainRef.current.gain.setTargetAtTime(0.0001, now, 0.05);
     }
