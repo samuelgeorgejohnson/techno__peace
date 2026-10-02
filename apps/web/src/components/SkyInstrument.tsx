@@ -396,7 +396,9 @@ export default function SkyInstrument({
       : manMadeAir.roadStatus === "unavailable"
         ? "unavailable"
         : "fallback";
-  const trafficReliable = manMadeAir.roadStatus === "live" && Boolean(manMadeAir.road);
+  const trafficReliable = manMadeAir.roadStatus === "live" && Boolean(manMadeAir.road) &&
+    [manMadeAir.road?.normalized?.density, manMadeAir.road?.normalized?.motion,
+      manMadeAir.road?.normalized?.proximity].every((value) => typeof value === "number" && Number.isFinite(value));
 
   const diagnosticsRows: DiagnosticRow[] = useMemo(() => {
     const fmtPercent = (value: number) => `${Math.round(value * 100)}%`;
@@ -492,11 +494,11 @@ export default function SkyInstrument({
             : "unavailable",
         userControl: `${Math.round((manMadeMix.road ?? 1) * 100)} / ${Math.round((manMadeMix.subway ?? 1) * 100)} / ${Math.round((manMadeMix.bus ?? 1) * 100)}%`,
         effective: "manual",
-        source: roadSourceStatus,
+        source: trafficReliable ? "live" : "fallback",
         note:
-          manMadeAir.roadStatus === "live"
-            ? "traffic uses real TomTom road flow only (no simulation)"
-            : "traffic unavailable when TomTom signal cannot be fetched",
+          trafficReliable
+            ? "synthetic vehicle passes shaped primarily by live TomTom flow"
+            : "synthetic traffic fallback shaped by device-local time; not live data",
       },
       {
         category: "Final audio modulation values",
@@ -518,7 +520,7 @@ export default function SkyInstrument({
       },
     ];
     return rows;
-  }, [birdsMix, chimesMix, currentRainMm, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.windMps, weatherSourceStatus, windMix, moonMix]);
+  }, [birdsMix, chimesMix, currentRainMm, currentTonicHz, effectiveHumidity, effectiveMoon, effectiveRain, effectiveSun, effectiveWind, manMadeAir.road?.relativeFlow, manMadeAir.roadStatus, manMadeMix.air, manMadeMix.bus, manMadeMix.road, manMadeMix.subway, manMadeSourceStatus, moonRawLive, nightFactor, placeBaseHz, rainMix, resolvedAirSignal.normalized.density, resolvedAirSignal.normalized.proximity, roadSourceStatus, trafficReliable, sunRawLive, sunMix, weather.humidityPct, weather.isDay, weather.windMps, weatherSourceStatus, windMix, moonMix]);
 
   const shouldShowSplash =
     !hasCompletedSplash &&
@@ -934,16 +936,16 @@ export default function SkyInstrument({
       return weather.isDay ? "Live: sparse wind chimes" : "Live: sparse night bell tones";
     }
     if (channelId === "traffic") {
-      if (manMadeAir.roadStatus === "live" && manMadeAir.road) {
+      if (trafficReliable && manMadeAir.road) {
         return `Live TomTom: flow ${Math.round((manMadeAir.road.relativeFlow ?? 0) * 100)}% • ${manMadeAir.road.congested ? "congested" : "free-flowing"}`;
       }
       if (manMadeAir.roadStatus === "unavailable") {
-        return "Traffic unavailable: TomTom signal unavailable";
+        return "Fallback synthesis: local time • TomTom unavailable";
       }
       if (manMadeAir.roadStatus === "loading" || manMadeAir.roadStatus === "idle") {
-        return "Traffic: loading real road flow";
+        return "Fallback synthesis: local time • loading TomTom";
       }
-      return "Traffic unavailable: failed to fetch TomTom signal";
+      return "Fallback synthesis: local time • no reliable TomTom flow";
     }
     if (channelId === "train" || channelId === "harbor") {
       return "Manual texture • Not Live";
